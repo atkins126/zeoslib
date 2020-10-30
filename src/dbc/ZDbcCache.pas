@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -73,11 +73,11 @@ type
     ColumnIndex: Integer;
   end;
 
-  TZIndexPairList = class(TZSortedList)
+  TZIndexPairList = class(TZCustomElementList)
   public
+    constructor Create;
     procedure Assign(Src: TZIndexPairList);
-    function Add(SrcOrDestIndex, ColumnIndex: Integer): Integer;
-    procedure Clear; override;
+    function Add(SrcOrDestIndex, ColumnIndex: Integer): NativeInt;
   end;
 
   PPZVarLenData = ^PZVarLenData;
@@ -2528,14 +2528,11 @@ end;
     value returned is <code>null</code>
 }
 {$IFNDEF NO_UTF8STRING}
-{$IFDEF FPC} {$PUSH}
-  {$WARN 5093 off : Function result variable of a managed type does not seem to be initialized}
-  {$WARN 5094 off : Function result variable of a managed type does not seem to be initialized}
-{$ENDIF} // ZSetString does the job even if NOT required
 function TZRowAccessor.GetUTF8String(ColumnIndex: Integer; out IsNull: Boolean): UTF8String;
 var P: Pointer;
   L: NativeUInt;
 begin
+  Result := '';
   case FColumnTypes[ColumnIndex{$IFNDEF GENERIC_INDEX} - 1{$ENDIF}] of
     stString, stAsciiStream:  begin
                         P := GetPAnsiChar(ColumnIndex, IsNull, L);
@@ -2545,14 +2542,12 @@ begin
                           else begin
                             FUniTemp := PRawToUnicode(P, L, fClientCP);
                             Result := PUnicodeToRaw(Pointer(FUniTemp), Length(fUniTemp), zCP_UTF8);
-                          end
-                        else Result := '';
+                          end;
                       end;
     stUnicodeString, stUnicodeStream:  begin
                         P := GetPWideChar(ColumnIndex, IsNull, L);
-                        if L > 0
-                        then Result := PUnicodeToRaw(P, L, zCP_UTF8)
-                        else Result := '';
+                        if L > 0 then
+                           Result := PUnicodeToRaw(P, L, zCP_UTF8);
                       end;
     else begin
       P := GetPAnsiChar(ColumnIndex, IsNull, L);
@@ -2560,7 +2555,6 @@ begin
     end;
   end;
 end;
-{$IFDEF FPC} {$POP} {$ENDIF} // ZSetString does the job even if NOT required
 {$ENDIF}
 
 {**
@@ -2572,18 +2566,14 @@ end;
   @return the column value; if the value is SQL <code>NULL</code>, the
     value returned is <code>null</code>
 }
-{$IFDEF FPC} {$PUSH}
-  {$WARN 5093 off : Function result variable of a managed type does not seem to be initialized}
-  {$WARN 5094 off : Function result variable of a managed type does not seem to be initialized}
-{$ENDIF} // ZSetString does the job even if NOT required
 function TZRowAccessor.GetRawByteString(ColumnIndex: Integer; out IsNull: Boolean): RawByteString;
 var P: PAnsichar;
   L: NativeUInt;
 begin
+  {$IFDEF FPC}Result := '';{$ENDIF}
   P := GetPAnsiChar(ColumnIndex, IsNull, L);
   ZSetString(P, L, Result);
 end;
-{$IFDEF FPC} {$POP} {$ENDIF} // ZSetString does the job even if NOT required
 
 {**
   Gets the value of the designated column in the current row
@@ -2779,8 +2769,10 @@ begin
       stTime: Result := (PZTime(Data)^.Hour or PZTime(Data)^.Minute or PZTime(Data)^.Second or PZTime(Data)^.Fractions) <> 0;
       stTimeStamp: Result := (PZTimeStamp(Data)^.Year or PZTimeStamp(Data)^.Month or PZTimeStamp(Data)^.Day or
         PZTimeStamp(Data)^.Hour or PZTimeStamp(Data)^.Minute or PZTimeStamp(Data)^.Second or PZTimeStamp(Data)^.Fractions) <> 0;
-      stString: Result := StrToBoolEx(PPAnsiChar(Data)^+PAnsiInc, False);
-      stUnicodeString: Result := StrToBoolEx(ZPPWideChar(Data)^+PWideInc, False);
+      stString: if Data^ <> nil then
+        Result := StrToBoolEx(PPAnsiChar(Data)^+PAnsiInc, False);
+      stUnicodeString: if Data^ <> nil then
+        Result := StrToBoolEx(ZPPWideChar(Data)^+PWideInc, False);
       stUnicodeStream: if (Data^ <> nil) and not PIZlob(Data)^.IsEmpty
           then Result := StrToBoolEx(PIZlob(Data)^.GetPWideChar(fUniTemp, Len))
           else IsNull := True;
@@ -3080,8 +3072,10 @@ begin
       stDouble: Result := {$IFDEF USE_FAST_TRUNC}ZFastCode.{$ENDIF}Trunc(PDouble(Data)^);
       stCurrency: Result := PInt64(Data)^ div 10000;
       stBigDecimal: Result := BCD2Int64(PBCD(Data)^);
-      stString: Result := RawToInt64Def(PPAnsiChar(Data)^+PAnsiInc, 0);
-      stUnicodeString: Result := UnicodeToInt64Def(ZPPWideChar(Data)^+PWideInc, 0);
+      stString: if Data^ <> nil then
+        Result := RawToInt64Def(PPAnsiChar(Data)^+PAnsiInc, 0);
+      stUnicodeString: if Data^ <> nil then
+        Result := UnicodeToInt64Def(ZPPWideChar(Data)^+PWideInc, 0);
       stAsciiStream: begin
           PA := GetPAnsiChar(ColumnIndex, IsNull, Len);
           Result := RawToInt64Def(PA, PA+Len, 0);
@@ -3135,8 +3129,10 @@ begin
       stDouble: Result := PDouble(Data)^;
       stCurrency: Result := PCurrency(Data)^;
       stBigDecimal: Result := BCDToDouble(PBCD(Data)^);
-      stString: SQLStrToFloatDef(PPAnsiChar(Data)^+PAnsiInc, 0, Result, PCardinal(PPointer(Data)^)^);
-      stUnicodeString: SQLStrToFloatDef(ZPPWideChar(Data)^+PWideInc, 0, Result, PCardinal(PPointer(Data)^)^ shr 1);
+      stString: if Data^ <> nil then
+        SQLStrToFloatDef(PPAnsiChar(Data)^+PAnsiInc, 0, Result, PCardinal(PPointer(Data)^)^);
+      stUnicodeString: if Data^ <> nil then
+        SQLStrToFloatDef(ZPPWideChar(Data)^+PWideInc, 0, Result, PCardinal(PPointer(Data)^)^ shr 1);
       stAsciiStream: if (Data^ <> nil) and not PIZlob(Data)^.IsEmpty then begin
             PA := PIZlob(Data)^.GetPAnsiChar(FColumnCodePages[ColumnIndex{$IFNDEF GENERIC_INDEX} - 1{$ENDIF}], fRawTemp, Len);
             SQLStrToFloatDef(PA, 0, Result, Len)
@@ -3983,7 +3979,8 @@ begin
     stDouble: PDouble(Data)^ := Ord(Value);
     stCurrency: PCurrency(Data)^ := Ord(Value);
     stBigDecimal: ScaledOrdinal2BCD(Word(Value), 0, PBCD(Data)^);
-    stString, stUnicodeString: SetString(ColumnIndex, BoolStrs[Value]);
+    stString: SetRawByteString(ColumnIndex, BoolStrsRaw[Value]);
+    stUnicodeString: SetUnicodeString(ColumnIndex, BoolStrsW[Value]);
     else raise ZDbcUtils.CreateConversionError(ColumnIndex, FColumnTypes[ColumnIndex{$IFNDEF GENERIC_INDEX} - 1{$ENDIF}], stBoolean)
   end;
 end;
@@ -5121,13 +5118,12 @@ end;
   @param ColumnIndex is the ColumnIndex of the MetaData or RowAccessor
   @return the new index in the list
 }
-function TZIndexPairList.Add(SrcOrDestIndex, ColumnIndex: Integer): Integer;
+function TZIndexPairList.Add(SrcOrDestIndex, ColumnIndex: Integer): NativeInt;
 var P: PZIndexPair;
 begin
-  GetMem(P, SizeOf(TZIndexPair));
+  P := inherited Add(Result);
   P.SrcOrDestIndex := SrcOrDestIndex;
   P.ColumnIndex := ColumnIndex;
-  Result := inherited Add(P);
 end;
 
 {**
@@ -5146,15 +5142,9 @@ begin
   end;
 end;
 
-{**
-  clears all items and relaeses the memory
-}
-procedure TZIndexPairList.Clear;
-var I: Integer;
+constructor TZIndexPairList.Create;
 begin
-  for i := 0 to Count -1 do
-    FreeMem(Items[i]);
-  inherited Clear;
+  inherited Create(SizeOf(TZIndexPair), False);
 end;
 
 { TZRowAccessorLob }

@@ -102,6 +102,8 @@ type
     procedure TestSF418_DESC;
     procedure TestSF418_ASC;
     procedure TestSF427;
+    procedure TestSF443;
+    procedure TestSF_Internal7;
   end;
 
   ZTestCompInterbaseBugReportMBCs = class(TZAbstractCompSQLTestCaseMBCs)
@@ -731,6 +733,9 @@ begin
     try
       Connection.User := '';
       Connection.Connect;
+      if not ((Connection.DbcConnection.GetServerProvider = spIB_FB) and //in case of embedded or trusted auth this test is not resolvable
+          (Connection.DbcConnection.GetMetadata.GetDatabaseInfo as IZInterbaseDatabaseInfo).HostIsFireBird and
+          (Connection.DbcConnection.GetHostVersion >= 3000000) ) then
       Fail('Problems with change user name');
     except on E: Exception do
       CheckNotTestFailure(E);
@@ -1540,6 +1545,81 @@ begin
 end;
 
 
+procedure ZTestCompInterbaseBugReport.TestSF443;
+const DescAsc: Array[boolean] of String = (' DESC',' ASC');
+var
+  Query: TZReadOnlyQuery;
+  B: Boolean;
+begin
+  Query := CreateReadOnlyQuery;
+  Check(Query <> nil);
+  try
+    Query.SQL.Text := 'select * from date_values where d_date>2020-09-25';
+    try
+      Query.Open;
+    except
+      on E:Exception do
+        CheckNotTestFailure(E, 'missing date quotes');
+    end;
+    {$IFDEF WITH_ACTIVE_DATASET_ERROR_ON_FIRST_ROW_BUG}
+   /// Check(Query.Active); //that's a FPC bug. Delphi datasets are closed and is related to the DBGRIDS only
+    Check(Query.Eof);
+    {$ENDIF}
+    Query.SQL.Text := 'select * from date_values';
+    for B := false to true do begin
+      Query.Active := False;
+      Query.IndexFieldNames := 'd_id' +DescAsc[b];
+      Query.Open;
+    end;
+  finally
+    Query.Free;
+  end;
+end;
+
+procedure ZTestCompInterbaseBugReport.TestSF_Internal7;
+//const DescAsc: Array[boolean] of String = (' DESC',' ASC');
+var
+  Query: TZReadOnlyQuery;
+  Field: TField;
+begin
+  Connection.Connect;
+  Check(Connection.Connected);
+  if (Connection.DbcConnection.GetHostVersion < 4000000) or not (Connection.DbcConnection.GetMetadata.GetDatabaseInfo as IZInterbaseDatabaseInfo).HostIsFireBird then
+    Exit;
+    //Fail('This test can only be run on Firebird 4+');
+
+  Query := CreateReadOnlyQuery;
+  try
+    Query.SQL.Text := 'select * from firebird4datatypes';
+    Query.Open;
+    Check(Query.Active);
+
+    Field := Query.FindField('time_with_time_zone');
+    Check(Assigned(Field), 'Field time_with_time_zone not found.');
+    CheckEquals(ftTime, Field.DataType, 'Field time_with_time_zone is not of type ftTime');
+
+    Field := Query.FindField('timestamp_with_time_zone');
+    Check(Assigned(Field), 'Field timestamp_with_time_zone not found.');
+    CheckEquals(ftDateTime, Field.DataType, 'Field timestamp_with_time_zone is not of type ftDateTime');
+
+    Field := Query.FindField('decfloat16');
+    Check(Assigned(Field), 'Field decfloat16 not found.');
+    CheckEquals(ftFloat, Field.DataType, 'Field decfloat16 is not of type ftFloat');
+
+    Field := Query.FindField('decfloat34');
+    Check(Assigned(Field), 'Field decfloat34 not found.');
+    CheckEquals(ftFloat, Field.DataType, 'Field decfloat34 is not of type ftFloat');
+
+    Field := Query.FindField('float30');
+    Check(Assigned(Field), 'Field float30 not found.');
+    CheckEquals(ftFloat, Field.DataType, 'Field float30 is not of type ftFloat');
+
+    Query.Close;
+  finally
+    Query.Free;
+  end;
+end;
+
 { ZTestCompInterbaseBugReportMBCs }
 
 //function ZTestCompInterbaseBugReportMBCs.GetSupportedProtocols: string;
@@ -1564,8 +1644,8 @@ var
   SL: TStringList;
   {$IFDEF UNICODE}
   R: RawByteString;
-  {$ENDIF}
   ConSettings: PZConSettings;
+  {$ENDIF}
 begin
 //??  if SkipForReason(srClosedBug) then Exit;
   Query := CreateQuery;
@@ -1576,8 +1656,9 @@ begin
     begin
       SQL.Text := 'DELETE FROM people where p_id = ' + IntToStr(TEST_ROW_ID);
       ExecSQL;
+      {$IFDEF UNICODE}
       ConSettings := Connection.DbcConnection.GetConSettings;
-
+      {$ENDIF UNICODE}
 
       SQL.Text := 'INSERT INTO people(P_ID, P_NAME, P_RESUME)'+
         ' VALUES (:P_ID, :P_NAME, :P_RESUME)';

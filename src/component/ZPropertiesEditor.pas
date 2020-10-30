@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -916,33 +916,6 @@ const
     Providers: (Count: 0; Items: nil);
     Protocols: (Count: 0; Items: nil);
   );
-  ZProp_UpdateMode : TZProperty = (
-    Name: DSProps_Update;
-    Purpose: 'Determine how to genearate the update statement params.'+LineEnding+
-      'Using All brings best performance(minior stmt-caching) for tables whith a low field-count -> normailization dude!'+LineEnding+
-      'Otherwise the behavior might be vice versa. Same as TZDataset.UpdateMode property';
-    ValueType: pvtEnum; LevelTypes: [pltResolver];
-    Values: 'all|changed'; Default: 'changed'; Alias: '';
-    Providers: (Count: 0; Items: nil);
-    Protocols: (Count: 0; Items: nil);
-  );
-  ZProp_WhereMode : TZProperty = (
-    Name: DSProps_Where;
-    Purpose: 'Determine how to genearate the where clause. Same as TZDataset.WhereMode property';
-    ValueType: pvtEnum; LevelTypes: [pltResolver];
-    Values: 'all|keyonly'; Default: 'keyonly'; Alias: '';
-    Providers: (Count: 0; Items: nil);
-    Protocols: (Count: 0; Items: nil);
-  );
-  ZProp_CalcDefauls : TZProperty = (
-    Name: DSProps_Defaults;
-    Purpose: 'Calc defaults for empty columns? It will decrease your performance using it.'+LineEnding+
-             'If your table has no default values declared, turn it off!';
-    ValueType: pvtEnum; LevelTypes: [pltResolver];
-    Values: cBoolEnum; Default: cBoolTrue; Alias: '';
-    Providers: (Count: 0; Items: nil);
-    Protocols: (Count: 0; Items: nil);
-  );
 {$IF declared(DSProps_PreferPrepared)}
   ZProp_PreferPrepared : TZProperty = (
     Name: DSProps_PreferPrepared;
@@ -1260,7 +1233,7 @@ const
   const
     AllMySQL: array[0..1] of String = ('mariadb','mysql');
   const cMySQLProvider: TZPropertyProvider = (
-    Provider: spMySQL; MinimumServerVersion: 0;
+    Provider: spMySQL; MinimumServerVersion: 10;
     MinimumClientVersion: 0; MinimumProtocolVersion: 0;);
   ZProp_MYSQLSSL : TZProperty = (
     Name: ConnProps_MYSQLSSL;
@@ -1884,6 +1857,259 @@ const
     @ZProp_MYSQL_OPT_OPTIONAL_RESULTSET_METADATA, @ZProp_MYSQL_OPT_SSL_FIPS_MODE,
     @ZProp_MYSQL_OPT_TLS_CIPHERSUITES, @ZProp_MYSQL_OPT_COMPRESSION_ALGORITHMS,
     @ZProp_MYSQL_OPT_ZSTD_COMPRESSION_LEVEL);
+
+ ZProp_MYSQL_DATABASE_DRIVER : TZProperty = (
+    Name: ConnProps_MYSQL_DATABASE_DRIVER;
+    Purpose: 'Unknown';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_SSL_FP : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_SSL_FP;
+    Purpose: 'Specify the SHA1 fingerprint of a server certificate for '+
+      'validation during the TLS handshake. This is deprecated. Use '+
+      'MARIADB_OPT_TLS_PEER_FP instead.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_SSL_FP_LIST : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_SSL_FP_LIST;
+    Purpose: 'Specify a file which contains one or more SHA1 fingerprints of '+
+      'server certificates for validation during the TLS handshake. This is '+
+      'deprecated. Use MARIADB_OPT_TLS_PEER_FP_LIST instead.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_TLS_PASSPHRASE : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_TLS_PASSPHRASE;
+    Purpose: 'Specify a passphrase for a passphrase-protected private key, '+
+      'as configured by the MYSQL_OPT_SSL_KEY option. This option is only '+
+      'supported if the connector was built with OpenSSL or GnuTLS. If the '+
+      'connector was built with Schannel, then this option is not supported. '+
+      'See TLS and Cryptography Libraries Used by MariaDB for more information '+
+      'about which libraries are used on which platforms.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_TLS_CIPHER_STRENGTH : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_TLS_CIPHER_STRENGTH;
+    Purpose: 'Cipher strength. This value will be passed as an unsigned int parameter.';
+    ValueType: pvtNumber; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_TLS_VERSION : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_TLS_VERSION;
+    Purpose: 'Defines which TLS protocol versions are allowed. This should be a '+
+      'comma-separated list of TLS protocol versions to allow. Valid TLS '+
+      'protocol versions are TLSv1.0, TLSv1.1, TLSv1.2, and TLSv1.3. Both the '+
+      'client and server should support the allowed TLS protocol versions. See '+
+      'Secure Connections Overview: TLS Protocol Version Support for information '+
+      'on which TLS libraries support which TLS protocol versions. See TLS and '+
+      'Cryptography Libraries Used by MariaDB for more information about which '+
+      'TLS libraries are used on which platforms.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_TLS_PEER_FP : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_TLS_PEER_FP;
+    Purpose: 'Specify the SHA1 fingerprint of a server certificate for '+
+      'validation during the TLS handshake.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_TLS_PEER_FP_LIST : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_TLS_PEER_FP_LIST;
+    Purpose: 'Specify a file which contains one or more SHA1 fingerprints of '+
+      'server certificates for validation during the TLS handshake.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_CONNECTION_READ_ONLY : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_CONNECTION_READ_ONLY;
+    Purpose: 'This option is used by connection handler plugins and indicates '+
+      'that the current connection will be used for read operations only.';
+    ValueType: pvtEnum; LevelTypes: [pltConnection];
+    Values: '0|1'; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MYSQL_OPT_CONNECT_ATTRS : TZProperty = (
+    Name: ConnProps_MYSQL_OPT_CONNECT_ATTRS;
+    Purpose: 'for mysql_get_optionv.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_USERDATA : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_USERDATA;
+    Purpose: 'Bundle user data to the current connection, e.g. for use in '+
+      'connection handler plugins. This option requires 4 parameters: '+
+      'connection, option, key and value.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_CONNECTION_HANDLER : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_CONNECTION_HANDLER;
+    Purpose: 'Specify the name of a connection handler plugin.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_PORT : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_PORT;
+    Purpose: 'Port number to use for connection.';
+    ValueType: pvtNumber; LevelTypes: [pltConnection];
+    Values: ''; Default: '3307'; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_UNIXSOCKET : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_UNIXSOCKET;
+    Purpose: 'For connections to localhost, the Unix socket file to use, or, '+
+      'on Windows, the name of the named pipe to use.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_PASSWORD : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_PASSWORD;
+    Purpose: 'Password of the user to login to the server.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: ConnProps_Username;
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_HOST : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_HOST;
+    Purpose: 'Hostname or IP address of the server to connect to.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_USER : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_USER;
+    Purpose: 'User to login to the server.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: ConnProps_Username;
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_SCHEMA : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_SCHEMA;
+    Purpose: 'Database to use.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_DEBUG : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_DEBUG;
+    Purpose: 'Unknown.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_FOUND_ROWS : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_FOUND_ROWS;
+    Purpose: 'Return the number of matched rows instead of number of changed rows.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: '0|1'; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_MULTI_RESULTS : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_MULTI_RESULTS;
+    Purpose: 'Indicates that the client is able to handle multiple result sets '+
+      'from stored procedures or multi statements. This option will be '+
+      'automatically set if MARIADB_OPT_MULTI_STATEMENTS is set.';
+    ValueType: pvtEnum; LevelTypes: [pltConnection];
+    Values: '1'; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_MULTI_STATEMENTS : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_MULTI_STATEMENTS;
+    Purpose: 'Allows the client to send multiple statements in one command. '+
+      'Statements will be divided by a semicolon.';
+    ValueType: pvtEnum; LevelTypes: [pltConnection];
+    Values: '1'; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_INTERACTIVE : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_INTERACTIVE;
+    Purpose: 'not documented.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_PROXY_HEADER : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_PROXY_HEADER;
+    Purpose: 'not documented.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZProp_MARIADB_OPT_IO_WAIT : TZProperty = (
+    Name: ConnProps_MARIADB_OPT_IO_WAIT;
+    Purpose: 'not documented.';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cMySQLProvider);
+    Protocols: (Count: 1; Items: @AllMySQL[1]);
+ );
+ ZMariaDbConnectorOptionProperties: Array[Low(TMariaDBConnectorOption)..High(TMariaDBConnectorOption)] of PZProperty = (
+    @ZProp_MYSQL_DATABASE_DRIVER,
+    @ZProp_MARIADB_OPT_SSL_FP,             // deprecated, use MARIADB_OPT_TLS_PEER_FP instead
+    @ZProp_MARIADB_OPT_SSL_FP_LIST,        // deprecated, use MARIADB_OPT_TLS_PEER_FP_LIST instead
+    @ZProp_MARIADB_OPT_TLS_PASSPHRASE,     // passphrase for encrypted certificates
+    @ZProp_MARIADB_OPT_TLS_CIPHER_STRENGTH,
+    @ZProp_MARIADB_OPT_TLS_VERSION,
+    @ZProp_MARIADB_OPT_TLS_PEER_FP,            // single finger print for server certificate verification
+    @ZProp_MARIADB_OPT_TLS_PEER_FP_LIST,       // finger print white list for server certificate verification
+    @ZProp_MARIADB_OPT_CONNECTION_READ_ONLY,
+    @ZProp_MYSQL_OPT_CONNECT_ATTRS,        // for mysql_get_optionv
+    @ZProp_MARIADB_OPT_USERDATA,
+    @ZProp_MARIADB_OPT_CONNECTION_HANDLER,
+    @ZProp_MARIADB_OPT_PORT,
+    @ZProp_MARIADB_OPT_UNIXSOCKET,
+    @ZProp_MARIADB_OPT_PASSWORD,
+    @ZProp_MARIADB_OPT_HOST,
+    @ZProp_MARIADB_OPT_USER,
+    @ZProp_MARIADB_OPT_SCHEMA,
+    @ZProp_MARIADB_OPT_DEBUG,
+    @ZProp_MARIADB_OPT_FOUND_ROWS,
+    @ZProp_MARIADB_OPT_MULTI_RESULTS,
+    @ZProp_MARIADB_OPT_MULTI_STATEMENTS,
+    @ZProp_MARIADB_OPT_INTERACTIVE,
+    @ZProp_MARIADB_OPT_PROXY_HEADER,
+    @ZProp_MARIADB_OPT_IO_WAIT
+);
 {$ENDIF}
 
 {$IF defined(ENABLE_INTERBASE) OR DEFINED(ENABLE_FIREBIRD)}
@@ -3102,6 +3328,84 @@ const
     Providers: (Count: 1; Items: @cSqlite3upProvider);
     Protocols: (Count: 1; Items: @cSQLiteProtocol);
   );
+  ZProp_SQLiteOpen_Flags : TZProperty = (
+    Name: ConnProps_SQLiteOpen_Flags;
+    Purpose: 'Support sqlite_open_v2'+LineEnding+
+      'see: https://www.sqlite.org/c3ref/open.html'+LineEnding+
+      'all values are defined in ZPlainSqLiteDriver.pas'+LineEnding+
+      'i.e. thread-safety';
+    ValueType: pvtNumber; LevelTypes: [pltConnection];
+    Values: cBoolEnum; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cSqlite3upProvider);
+    Protocols: (Count: 1; Items: @cSQLiteProtocol);
+  );
+  ZProp_SQLiteOpen_zVfs : TZProperty = (
+    Name: ConnProps_SQLiteOpen_zVfs;
+    Purpose: 'Support sqlite_open_v2'+LineEnding+
+      'see: https://www.sqlite.org/c3ref/open.html';
+    ValueType: pvtString; LevelTypes: [pltConnection];
+    Values: cBoolEnum; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cSqlite3upProvider);
+    Protocols: (Count: 1; Items: @cSQLiteProtocol);
+  );
+{$ENDIF}
+
+{$IFDEF ENABLE_ORACLE}
+  cOracleProvider: TZPropertyProvider = (
+    Provider: spOracle; MinimumServerVersion: 0;
+    MinimumClientVersion: 0; MinimumProtocolVersion: 0;);
+  cOracleProtocol: String = 'oracle';
+  ZProp_ServerCachedStmts : TZProperty = (
+    Name: ConnProps_ServerCachedStmts;
+    Purpose: 'If enabled or not specified, sets StatementMode to OCI_STMT_CACHE (refer to Oracle manual for details)';
+    ValueType: pvtEnum; LevelTypes: [pltConnection, pltStatement];
+    Values: cBoolEnum; Default: cBoolTrue; Alias: '';
+    Providers: (Count: 1; Items: @cOracleProvider);
+    Protocols: (Count: 1; Items: @cOracleProtocol);
+  );
+  ZProp_BlobPrefetchSize : TZProperty = (
+    Name: ConnProps_BlobPrefetchSize;
+    Purpose: 'Sets value for OCI_ATTR_DEFAULT_LOBPREFETCH_SIZE option, refer to Oracle manual for details';
+    ValueType: pvtNumber; LevelTypes: [pltConnection, pltStatement];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cOracleProvider);
+    Protocols: (Count: 1; Items: @cOracleProtocol);
+  );
+  ZProp_StatementCache : TZProperty = (
+    Name: ConnProps_StatementCache;
+    Purpose: 'Sets value for OCI_ATTR_STMTCACHESIZE option, refer to Oracle manual for details';
+    ValueType: pvtNumber; LevelTypes: [pltConnection, pltStatement];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cOracleProvider);
+    Protocols: (Count: 1; Items: @cOracleProtocol);
+  );
+  ZProp_row_prefetch_size : TZProperty = (
+    Name: DSProps_RowPrefetchSize;
+    Purpose: 'Sets value for OCI_ATTR_PREFETCH_MEMORY option, refer to Oracle manual for details';
+    ValueType: pvtNumber; LevelTypes: [pltConnection, pltStatement];
+    Values: ''; Default: ''; Alias: '';
+    Providers: (Count: 1; Items: @cOracleProvider);
+    Protocols: (Count: 1; Items: @cOracleProtocol);
+  );
+  ZProp_OCIAuthenticateMode : TZProperty = (
+    Name: ConnProps_OCIAuthenticateMode;
+    Purpose: 'Specifies the various modes of operation. '+ LineEnding+
+      'The constants are defined in ZPlainOracleDriver.pas'+LineEnding+
+      'Valid modes are: '+LineEnding+
+      'OCI_DEFAULT - in this mode, the user session context returned may only ever be set with the same server context specified in svchp. For encoding, the server handle uses the setting in the environment handle.'+LineEnding+
+      'OCI_MIGRATE - in this mode, the new user session context may be set in a '+
+      'service handle with a different server handle. This mode establishes the user session context. '+
+      'To create a migratable session, the service handle must already be set '+
+      'with a non-migratable user session, which becomes the "creator" session '+
+      'of the migratable session. That is, a migratable session must have a non-migratable parent session.'+LineEnding+
+      'OCI_SYSDBA - in this mode, the user is authenticated for SYSDBA access.'+LineEnding+
+      'OCI_SYSOPER - in this mode, the user is authenticated for SYSOPER access.'+LineEnding+
+      'OCI_PRELIM_AUTH - this mode may only be used with OCI_SYSDBA or OCI_SYSOPER to authenticate for certain administration tasks.';
+    ValueType: pvtNumber; LevelTypes: [pltConnection, pltStatement];
+    Values: ''; Default: '0'; Alias: '';
+    Providers: (Count: 1; Items: @cOracleProvider);
+    Protocols: (Count: 1; Items: @cOracleProtocol);
+  );
 {$ENDIF}
 
 {$IFDEF ENABLE_ASA}
@@ -3250,7 +3554,7 @@ const
     Protocols: (Count: 2; Items: @cASAProtocols);
   );
   ZProp_COMPTH : TZProperty = (
-    Name: ConnProps_COMP;
+    Name: ConnProps_COMPTH;
     Purpose: cASA_CompressionThresholdPurpose;
     ValueType: pvtNumber; LevelTypes: [pltConnection];
     Values: ''; Default: '120'; Alias: ConnProps_CompressionThreshold;
@@ -3705,11 +4009,10 @@ initialization
 
   RegisterZProperties([@ZProp_UID, @ZProp_Username, @ZProp_PWD, @ZProp_Password,
     @ZProp_LibLocation, @ZProp_CodePage, @ZProp_AutoEncodeStrings, //@ZProp_Transliterate,
-    @ZProp_ControlsCP, {@ZProp_RawStringEncoding, }@ZProp_Timeout,
+    @ZProp_ControlsCP, @ZProp_Timeout,
     @ZProp_DateReadFormat, @ZProp_DateWriteFormat, @ZProp_TimeReadFormat,
     @ZProp_TimeWriteFormat, @ZProp_DateTimeReadFormat, @ZProp_DateTimeWriteFormat,
-    @ZProp_IdentifierQuotes, @ZProp_UpdateMode, @ZProp_WhereMode, @ZProp_CalcDefauls,
-    @ZProp_KeyFields, @ZProp_AffectedRows]);
+    @ZProp_IdentifierQuotes, @ZProp_KeyFields, @ZProp_AffectedRows]);
 {$IF declared(DSProps_PreferPrepared)}
   RegisterZProperty(@ZProp_PreferPrepared);
 {$IFEND}
@@ -3721,7 +4024,11 @@ initialization
     @ZProp_Synchronous, @ZProp_LockingMode, @ZProp_ForeignKeys,
     @ZProp_journal_mode, @ZProp_BindDoubleDateTimeValues,
     @ZProp_BindOrdinalBoolValues, @ZProp_SQLiteTransactionBehaviour,
-    @ZProp_SQLiteIntAffinity]);
+    @ZProp_SQLiteIntAffinity, @ZProp_SQLiteOpen_Flags, @ZProp_SQLiteOpen_zVfs]);
+{$ENDIF}
+{$IFDEF ENABLE_ORACLE}
+  RegisterZProperties([@ZProp_ServerCachedStmts,@ZProp_BlobPrefetchSize,
+    @ZProp_StatementCache,@ZProp_row_prefetch_size,@ZProp_OCIAuthenticateMode]);
 {$ENDIF}
 {$IF declared(ZProp_CachedLobs)}
   RegisterZProperty(@ZProp_CachedLobs);
@@ -3760,6 +4067,7 @@ initialization
     @ZProp_MySQLLibrary, @ZProp_MySQL_UseResult,
     @ZProp_MySQL_STMT_ATTR_PREFETCH_ROWS, @ZProp_MySQL_chunk_size]);
   RegisterZPropertiesArray(Ord(High(TMySqlOption))+1, @ZMySqlOptionProperties);
+  RegisterZPropertiesArray(Ord(High(TMariaDBConnectorOption))+1-Ord(Low(TMariaDBConnectorOption)), @ZMariaDbConnectorOptionProperties);
 {$ENDIF}
 {$IF declared(ZProp_SessionIdleTimeOut)}
   RegisterZProperties([@ZProp_SessionIdleTimeOut, @ZProp_FirebirdAPI]);

@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -134,7 +134,17 @@ type
 
     procedure Prepare; override;
     procedure Unprepare; override;
-
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable;
       var AError: EZSQLConnectionLost); override;
   end;
@@ -917,15 +927,18 @@ var
   CachedResultSet: TZPostgresCachedResultSet;
   Resolver: TZPostgreSQLCachedResolver;
   Metadata: IZResultSetMetadata;
+  ServerMajorVersion: Integer;
 begin
   NativeResultSet := TZPostgreSQLResultSet.Create(Self, Self.SQL, FPostgreSQLConnection,
     @Fres, @FPQResultFormat, fServerCursor, FUndefinedVarcharAsStringLength);
   if (GetResultSetConcurrency = rcUpdatable) or (ServerCursor and (GetResultSetType <> rtForwardOnly)) then begin
     Metadata := NativeResultSet.GetMetaData;
-    if (FPostgreSQLConnection.GetServerMajorVersion > 7) then
+    ServerMajorVersion := FPostgreSQLConnection.GetServerMajorVersion;
+    if (ServerMajorVersion >= 10) then
+      Resolver := TZPostgreSQLCachedResolverV10up.Create(Self, Metadata)
+    else if (ServerMajorVersion > 7) then
       Resolver := TZPostgreSQLCachedResolverV8up.Create(Self, Metadata)
-    else if ((FPostgreSQLConnection.GetServerMajorVersion = 7) and
-        (FPostgreSQLConnection.GetServerMinorVersion >= 4))
+    else if ((ServerMajorVersion = 7) and (FPostgreSQLConnection.GetServerMinorVersion >= 4))
     then Resolver := TZPostgreSQLCachedResolverV74up.Create(Self, Metadata)
     else Resolver := TZPostgreSQLCachedResolver.Create(Self, Metadata);
     CachedResultSet := TZPostgresCachedResultSet.Create(NativeResultSet, Self.SQL, Resolver, ConSettings);
@@ -1367,15 +1380,14 @@ begin
     else Fres := PGExecutePrepared;
   if Fres <> nil then begin
     Status := FPlainDriver.PQresultStatus(Fres);
-    if ((Status = PGRES_TUPLES_OK) or (Status = PGRES_SINGLE_TUPLE)) and
-       (BindList.HasOutOrInOutOrResultParam) then begin
-      if not Assigned(LastResultSet) then
-        FOutParamResultSet := CreateResultSet(fServerCursor);
-      LastUpdateCount := RawToIntDef(FPlainDriver.PQcmdTuples(Fres), 0);
-    end else begin
-      LastUpdateCount := RawToIntDef(FPlainDriver.PQcmdTuples(Fres), 0);
+    LastUpdateCount := RawToIntDef(FPlainDriver.PQcmdTuples(Fres), 0);
+    if ((Status = PGRES_TUPLES_OK) or (Status = PGRES_SINGLE_TUPLE)) then begin
+      if LastResultSet = nil then
+        LastResultSet := CreateResultSet(fServerCursor);
+      if (BindList.HasOutOrInOutOrResultParam) then
+          FOutParamResultSet := CreateResultSet(fServerCursor);
+    end else
       FPlainDriver.PQclear(Fres);
-    end;
   end;
   Result := LastUpdateCount;
   { Logging Execution }

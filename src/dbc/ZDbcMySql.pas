@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -103,7 +103,7 @@ type
 
   { TZMySQLConnection }
 
-  TZMySQLConnection = class(TZAbstractSuccedaneousTxnConnection, IZConnection,
+  TZMySQLConnection = class(TZAbstractSingleTxnConnection, IZConnection,
     IZMySQLConnection, IZTransaction)
   private
     FCatalog: string;
@@ -123,15 +123,80 @@ type
     function CreateStatementWithParams(Info: TStrings): IZStatement;
     function PrepareStatementWithParams(const SQL: string; Info: TStrings):
       IZPreparedStatement;
-    function PrepareCallWithParams(const Name: String; Info: TStrings):
+    /// <summary>Creates a <code>CallableStatement</code> object for calling
+    ///  database stored procedures. The <code>CallableStatement</code> object
+    ///  provides methods for setting up its IN and OUT parameters, and methods
+    ///  for executing the call to a stored procedure. Note: This method is
+    ///  optimized for handling stored procedure call statements. Some drivers
+    ///  may send the call statement to the database when the method
+    ///  <c>prepareCall</c> is done; others may wait until the
+    ///  <c>CallableStatement</c> object is executed. This has no direct effect
+    ///  on users; however, it does affect which method throws certain
+    ///  EZSQLExceptions. Result sets created using the returned
+    ///  IZCallableStatement will have forward-only type and read-only
+    ///  concurrency, by default.</summary>
+    /// <param>"Name" a procedure or function name.</param>
+    /// <param>"Params" a statement parameters list.</param>
+    /// <returns> a new IZCallableStatement interface containing the
+    ///  pre-compiled SQL statement <returns>
+    function PrepareCallWithParams(const Name: String; Params: TStrings):
       IZCallableStatement;
-
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  released. Otherwise makes all changes made since the previous commit/
+    ///  rollback permanent and releases any database locks currently held by
+    ///  the Connection. This method should be used only when auto-commit mode
+    ///  has been disabled. See setAutoCommit.</summary>
     procedure Commit;
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  rolled back. Otherwise drops all changes made since the previous
+    ///  commit/rollback and releases any database locks currently held by this
+    ///  Connection. This method should be used only when auto-commit has been
+    ///  disabled. See setAutoCommit.</summary>
     procedure Rollback;
+    /// <summary>Attempts to change the transaction isolation level to the one
+    ///  given. The constants defined in the interface <c>Connection</c> are the
+    ///  possible transaction isolation levels. Note: This method cannot be
+    ///  called while in the middle of a transaction.
+    /// <param>"value" one of the TRANSACTION_* isolation values with the
+    ///  exception of TRANSACTION_NONE; some databases may not support other
+    ///  values. See DatabaseInfo.SupportsTransactionIsolationLevel</param>
     procedure SetTransactionIsolation(Level: TZTransactIsolationLevel); override;
+    /// <summary>Sets this connection's auto-commit mode. If a connection is in
+    ///  auto-commit mode, then all its SQL statements will be executed and
+    ///  committed as individual transactions. Otherwise, its SQL statements are
+    ///  grouped into transactions that are terminated by a call to either the
+    ///  method <c>commit</c> or the method <c>rollback</c>. By default, new
+    ///  connections are in auto-commit mode. The commit occurs when the
+    ///  statement completes or the next execute occurs, whichever comes first.
+    ///  In the case of statements returning a ResultSet, the statement
+    ///  completes when the last row of the ResultSet has been retrieved or the
+    ///  ResultSet has been closed. In advanced cases, a single statement may
+    ///  return multiple results as well as output parameter values. In these
+    ///  cases the commit occurs when all results and output parameter values
+    ///  have been retrieved. It is not recommented setting autoCommit to false
+    ///  because a call to either the method <c>commit</c> or the method
+    ///  <c>rollback</c> will restart the transaction. It's use full only if
+    ///  repeately many opertions are done and no startTransaction is intended
+    ///  to use. If you change mode to true the current Transaction and it's
+    ///  nested SavePoints are committed then.</summary>
+    /// <param>"Value" true enables auto-commit; false disables auto-commit.</param>
     procedure SetAutoCommit(Value: Boolean); override;
+    /// <summary>Starts transaction support or saves the current transaction.
+    ///  If the connection is closed, the connection will be opened.
+    ///  If a transaction is underway a nested transaction or a savepoint will
+    ///  be spawned. While the tranaction(s) is/are underway the AutoCommit
+    ///  property is set to False. Ending up the transaction with a
+    ///  commit/rollback the autocommit property will be restored if changing
+    ///  the autocommit mode was triggered by a starttransaction call.</summary>
+    /// <returns>Returns the current txn-level. 1 means a expicit transaction
+    ///  was started. 2 means the transaction was saved. 3 means the previous
+    ///  savepoint got saved too and so on.</returns>
     function StartTransaction: Integer;
-
+    /// <summary>Puts this connection in read-only mode as a hint to enable
+    ///  database optimizations. Note: This method cannot be called while in the
+    ///  middle of a transaction.</summary>
+    /// <param>"value" true enables read-only mode; false disables read-only
+    ///  mode.</param>
     procedure SetReadOnly(Value: Boolean); override;
 
     function PingServer: Integer; override;
@@ -158,6 +223,17 @@ type
     function GetServerProvider: TZServerProvider; override;
     function MySQL_FieldType_Bit_1_IsBoolean: Boolean;
     function SupportsFieldTypeBit: Boolean;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable;
       var AError: EZSQLConnectionLost); override;
     function GetPlainDriver: TZMySQLPlainDriver;
@@ -596,51 +672,69 @@ setuint:      UIntOpt := {$IFDEF UNICODE}UnicodeToUInt32Def{$ELSE}RawToUInt32Def
       CheckCharEncoding(FClientCodePage);
     end;
     inherited Open;
-    if TMySqlOptionMinimumVersion[MYSQL_OPT_MAX_ALLOWED_PACKET] < GetHostVersion then begin
-      S := Info.Values[ConnProps_MYSQL_OPT_MAX_ALLOWED_PACKET];
-      UIntOpt := {$IFDEF UNICODE}UnicodeToUInt32Def{$ELSE}RawToUInt32Def{$ENDIF}(S, 0);
-      if (UIntOpt <> 0) then begin
-        SQL := 'SET GLOBAL max_allowed_packet='+IntToRaw(UIntOpt);
+  finally
+    if Closed then begin
+      FPlainDriver.mysql_close(FHandle);
+      FHandle := nil;
+    end;
+  end;
+  if TMySqlOptionMinimumVersion[MYSQL_OPT_MAX_ALLOWED_PACKET] < GetHostVersion then begin
+    S := Info.Values[ConnProps_MYSQL_OPT_MAX_ALLOWED_PACKET];
+    UIntOpt := {$IFDEF UNICODE}UnicodeToUInt32Def{$ELSE}RawToUInt32Def{$ENDIF}(S, 0);
+    if (UIntOpt <> 0) then begin
+      SQL := 'SET GLOBAL max_allowed_packet='+IntToRaw(UIntOpt);
+      ExecuteImmediat(SQL, lcOther);
+    end;
+  end;
+  //no real version check required -> the user can simply switch off treading
+  //enum('Y','N')
+  S := Info.Values[ConnProps_MySQL_FieldType_Bit_1_IsBoolean];
+  FMySQL_FieldType_Bit_1_IsBoolean := StrToBoolEx(S);
+  FSupportsBitType := (
+    (    FPlainDriver.IsMariaDBDriver and (ClientVersion >= 100109) ) or
+    (not FPlainDriver.IsMariaDBDriver and (ClientVersion >=  50003) ) ) and (GetHostVersion >= EncodeSQLVersioning(5,0,3));
+  //if not explizit !un!set -> assume as default since Zeos 7.3
+  FMySQL_FieldType_Bit_1_IsBoolean := FMySQL_FieldType_Bit_1_IsBoolean or (FSupportsBitType and (S = ''));
+  with (GetMetadata as IZMySQLDatabaseMetadata) do begin
+    SetMySQL_FieldType_Bit_1_IsBoolean(FMySQL_FieldType_Bit_1_IsBoolean);
+    FSupportsReadOnly := ( IsMariaDB and (GetHostVersion >= EncodeSQLVersioning(10,0,0))) or
+                         ( IsMySQL and (GetHostVersion >= EncodeSQLVersioning( 5,6,0)));
+    SetDataBaseName(GetDatabaseName);
+    with CreateStatement.ExecuteQuery('show variables like "lower_case_table_names"') do begin
+      if next
+      then Set_lower_case_table_names(GetByte(FirstDBCIndex))
+      else Set_lower_case_table_names({$IFDEF WINDOWS}1{$ELSE}{$IFDEF DARWIN}2{$ELSE}0{$ENDIF}{$ENDIF});
+      Close;
+    end;
+    sMyOpt := LowerCase(FClientCodePage);
+    if (sMyOpt = 'utf8') and (IsMariaDB or (GetHostVersion >= EncodeSQLVersioning(4,1,0))) then begin
+      CheckCharEncoding('utf8mb4');
+      //EH: MariaDB needs a explizit set of charset to be synced on Client<>Server!
+      SQL := {$IFDEF UNICODE}UnicodeStringToAscii7{$ENDIF}(FClientCodePage);
+      if not Assigned(FPlainDriver.mysql_set_character_set) or
+            (FPlainDriver.mysql_set_character_set(FHandle, Pointer(SQL)) <> 0) then begin //failed? might be possible the function does not exists
+        SQL := 'SET NAMES '+SQL;
         ExecuteImmediat(SQL, lcOther);
       end;
     end;
-    //no real version check required -> the user can simply switch off treading
-    //enum('Y','N')
-    S := Info.Values[ConnProps_MySQL_FieldType_Bit_1_IsBoolean];
-    FMySQL_FieldType_Bit_1_IsBoolean := StrToBoolEx(S);
-    FSupportsBitType := (
-      (    FPlainDriver.IsMariaDBDriver and (ClientVersion >= 100109) ) or
-      (not FPlainDriver.IsMariaDBDriver and (ClientVersion >=  50003) ) ) and (GetHostVersion >= EncodeSQLVersioning(5,0,3));
-    //if not explizit !un!set -> assume as default since Zeos 7.3
-    FMySQL_FieldType_Bit_1_IsBoolean := FMySQL_FieldType_Bit_1_IsBoolean or (FSupportsBitType and (S = ''));
-    with (GetMetadata as IZMySQLDatabaseMetadata) do begin
-      SetMySQL_FieldType_Bit_1_IsBoolean(FMySQL_FieldType_Bit_1_IsBoolean);
-      FSupportsReadOnly := ( IsMariaDB and (GetHostVersion >= EncodeSQLVersioning(10,0,0))) or
-                           ( IsMySQL and (GetHostVersion >= EncodeSQLVersioning( 5,6,0)));
-      SetDataBaseName(GetDatabaseName);
-    end;
-
-    { Sets transaction isolation level. }
-    if not (TransactIsolationLevel in [tiNone,tiRepeatableRead]) then
-      ExecuteImmediat(MySQLSessionTransactionIsolation[TransactIsolationLevel], lcTransaction);
-    if (FSupportsReadOnly and ReadOnly) then
-      ExecuteImmediat(MySQLSessionTransactionReadOnly[ReadOnly], lcTransaction);
-
-    { Sets an auto commit mode. }
-    if not AutoCommit then begin
-      AutoCommit := True;
-      SetAutoCommit(False);
-    end;
-    if FSupportsReadOnly and ReadOnly then begin
-      ReadOnly := False;
-      SetReadOnly(True);
-    end;
-
-  except
-    FPlainDriver.mysql_close(FHandle);
-    FHandle := nil;
-    raise;
   end;
+
+  { Sets transaction isolation level. }
+  if not (TransactIsolationLevel in [tiNone,tiRepeatableRead]) then
+    ExecuteImmediat(MySQLSessionTransactionIsolation[TransactIsolationLevel], lcTransaction);
+  if (FSupportsReadOnly and ReadOnly) then
+    ExecuteImmediat(MySQLSessionTransactionReadOnly[ReadOnly], lcTransaction);
+
+  { Sets an auto commit mode. }
+  if not AutoCommit then begin
+    AutoCommit := True;
+    SetAutoCommit(False);
+  end;
+  if FSupportsReadOnly and ReadOnly then begin
+    ReadOnly := False;
+    SetReadOnly(True);
+  end;
+
 
   if FClientCodePage = '' then begin //workaround for MySQL 4 down
     with CreateStatement.ExecuteQuery('show variables like "character_set_database"') do begin
@@ -666,39 +760,13 @@ begin
    else Result := FPlainDriver.mysql_ping(FHandle);
 end;
 
-{**
-  Creates a <code>CallableStatement</code> object for calling
-  database stored procedures.
-  The <code>CallableStatement</code> object provides
-  methods for setting up its IN and OUT parameters, and
-  methods for executing the call to a stored procedure.
-
-  <P><B>Note:</B> This method is optimized for handling stored
-  procedure call statements. Some drivers may send the call
-  statement to the database when the method <code>prepareCall</code>
-  is done; others
-  may wait until the <code>CallableStatement</code> object
-  is executed. This has no
-  direct effect on users; however, it does affect which method
-  throws certain SQLExceptions.
-
-  Result sets created using the returned CallableStatement will have
-  forward-only type and read-only concurrency, by default.
-
-  @param Name a procedure or function identifier
-    parameter placeholders. Typically this  statement is a JDBC
-    function call escape string.
-  @param Info a statement parameters.
-  @return a new CallableStatement object containing the
-    pre-compiled SQL statement
-}
 function TZMySQLConnection.PrepareCallWithParams(const Name: String;
-  Info: TStrings): IZCallableStatement;
+  Params: TStrings): IZCallableStatement;
 begin
   if (FPLainDriver.IsMariaDBDriver and (FPLainDriver.mysql_get_client_version >= 100000)) or
      (not FPLainDriver.IsMariaDBDriver and (FPLainDriver.mysql_get_client_version >= 50608))
-  then Result := TZMySQLCallableStatement56up.Create(Self, Name, Info)
-  else Result := TZMySQLCallableStatement56down.Create(Self, Name, Info);
+  then Result := TZMySQLCallableStatement56up.Create(Self, Name, Params)
+  else Result := TZMySQLCallableStatement56down.Create(Self, Name, Params);
 end;
 
 {**
@@ -797,19 +865,18 @@ Var
  killquery: SQLString;
  izc: IZConnection;
 Begin
-  // https://dev.mysql.com/doc/refman/5.7/en/mysql-kill.html
-  killquery := 'KILL QUERY ' + IntToStr(FPlainDriver.mysql_thread_id(FHandle));
-  izc := DriverManager.GetConnection(GetURL);
-  Result := izc.CreateStatement.ExecuteUpdate(killquery);
+  { EH untested, just prepared
+  if Assigned(FPlainDriver.mariadb_cancel) then begin
+    Result := FPlainDriver.mariadb_cancel(FHandle);
+    FPlainDriver.mariadb_reconnect(FHandle)
+  end else }begin
+    // https://dev.mysql.com/doc/refman/5.7/en/mysql-kill.html
+    killquery := 'KILL QUERY ' + IntToStr(FPlainDriver.mysql_thread_id(FHandle));
+    izc := DriverManager.GetConnection(GetURL);
+    Result := izc.CreateStatement.ExecuteUpdate(killquery);
+  end;
 End;
 
-{**
-  Makes all changes made since the previous
-  commit/rollback permanent and releases any database locks
-  currently held by the Connection. This method should be
-  used only when auto-commit mode has been disabled.
-  @see #setAutoCommit
-}
 procedure TZMySQLConnection.Commit;
 var S: RawByteString;
 begin
@@ -833,13 +900,6 @@ begin
   end
 end;
 
-{**
-  Drops all changes made since the previous
-  commit/rollback and releases any database locks currently held
-  by this Connection. This method should be used only when auto-
-  commit has been disabled.
-  @see #setAutoCommit
-}
 procedure TZMySQLConnection.ReleaseImmediat(
   const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
 begin
@@ -950,16 +1010,6 @@ begin
   FCatalog := Catalog;
 end;
 
-{**
-  Puts this connection in read-only mode as a hint to enable
-  database optimizations.
-
-  <P><B>Note:</B> This method cannot be called while in the
-  middle of a transaction.
-
-  @param readOnly true enables read-only mode; false disables
-    read-only mode.
-}
 procedure TZMySQLConnection.SetReadOnly(Value: Boolean);
 begin
   if Value <> ReadOnly then begin
@@ -972,13 +1022,6 @@ begin
   end;
 end;
 
-{**
-  Drops all changes made since the previous
-  commit/rollback and releases any database locks currently held
-  by this Connection. This method should be used only when auto-
-  commit has been disabled.
-  @see #setAutoCommit
-}
 procedure TZMySQLConnection.SetTransactionIsolation(
   Level: TZTransactIsolationLevel);
 begin

@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -70,7 +70,7 @@ type
   public
     AutoIncrement: Boolean;
     CaseSensitive: Boolean;
-    Searchable: Boolean;
+    Searchable, SearchableDisabled: Boolean;
     Currency: Boolean; //note we'll map all fixed numbers to stCurrency(ftBCD)
                         //if Scale&Precision allows it. But if a field is a true
                         //currency field like MS/PG-Money should be indicated here
@@ -100,10 +100,12 @@ type
   private
     FLoaded: Boolean;
     FMetadata: IZDatabaseMetadata;
-    FColumnsLabels: TStrings;
+    FColumnsLabelsCS, //a case sensitive list of unique column labels
+    FColumnsLabelsCI: TStrings;  //a lower case list of unique column labels if still duplicate values exist
+
     FSQL: string;
     FTableColumns: TZHashMap;
-    FIdentifierConvertor: IZIdentifierConvertor;
+    FIdentifierConverter: IZIdentifierConverter;
     FResultSet: TZAbstractResultSet;
     procedure SetMetadata(const Value: IZDatabaseMetadata);
   protected
@@ -146,23 +148,30 @@ type
     procedure ReplaceStarColumns(const SelectSchema: IZSelectSchema);
 
     property MetaData: IZDatabaseMetadata read FMetadata write SetMetadata;
-    property ColumnsLabels: TStrings read FColumnsLabels write FColumnsLabels;
+    property ColumnsLabels: TStrings read FColumnsLabelsCS write FColumnsLabelsCS;
     property SQL: string read FSQL write FSQL;
-    property IdentifierConvertor: IZIdentifierConvertor
-      read FIdentifierConvertor write FIdentifierConvertor;
+    property IdentifierConverter: IZIdentifierConverter
+      read FIdentifierConverter write FIdentifierConverter;
     property Loaded: Boolean read FLoaded write FLoaded;
     property ResultSet: TZAbstractResultSet read FResultSet write FResultSet;
   public
     constructor Create(const Metadata: IZDatabaseMetadata; const SQL: string;
       ParentResultSet: TZAbstractResultSet);
     destructor Destroy; override;
-
+    /// <summary>Maps the given <c>Metadata</c> column name to its
+    ///  <c>Metadata</c> column index. First searches with case-sensivity then,
+    ///  if nothing matches, a case.insensitive search is performed.
+    /// <param>"ColumnName" the name of the column</param>
+    /// <returns>the column index of the given column name or an
+    ///  InvalidDbcIndex if nothing was found</returns>
     function FindColumn(const ColumnName: string): Integer;
-
-    function GetColumnCount: Integer; virtual;
+    /// <summary>get the number of columns in this <c>ResultSet</c> interface.</summary>
+    /// <returns>the number of columns</returns>
+    function GetColumnCount: Integer;
     function IsAutoIncrement(ColumnIndex: Integer): Boolean; virtual;
     function IsCaseSensitive(ColumnIndex: Integer): Boolean; virtual;
     function IsSearchable(ColumnIndex: Integer): Boolean; virtual;
+    procedure SetSearchable(ColumnIndex: Integer; Value: Boolean);
     function IsCurrency(ColumnIndex: Integer): Boolean; virtual;
     function IsNullable(ColumnIndex: Integer): TZColumnNullableType; virtual;
 
@@ -180,6 +189,12 @@ type
     function GetColumnType(ColumnIndex: Integer): TZSQLType; virtual;
     function GetColumnTypeName(ColumnIndex: Integer): string; virtual;
     function IsReadOnly(ColumnIndex: Integer): Boolean; virtual;
+    /// <summary>Set the readonly state of a field. The value will be ignored
+    ///  if the field is not writable.</summary>
+    /// <param>"ColumnIndex" the columnnumber of the field.</param>
+    /// <param>"Value" if <c>true</c> then the field will be ignored on
+    ///  generating the dml's.</param>
+    procedure SetReadOnly(ColumnIndex: Integer; Value: Boolean); virtual;
     function IsWritable(ColumnIndex: Integer): Boolean; virtual;
     function IsDefinitelyWritable(ColumnIndex: Integer): Boolean; virtual;
     function GetDefaultValue(ColumnIndex: Integer): string; virtual;
@@ -240,10 +255,11 @@ end;
 }
 destructor TZAbstractResultSetMetadata.Destroy;
 begin
-  FIdentifierConvertor := nil;
+  FIdentifierConverter := nil;
   FMetadata := nil;
   FreeAndNil(FTableColumns);
-  FreeAndNil(FColumnsLabels);
+  FreeAndNil(FColumnsLabelsCS);
+  FreeAndNil(FColumnsLabelsCI);
   inherited Destroy;
 end;
 
@@ -289,32 +305,27 @@ begin
 end;
 {$IFDEF FPC} {$POP} {$ENDIF}
 
-
-{**
-  Maps the given <code>Metadata</code> column name to its
-  <code>Metadata</code> column index.
-  First searches with case-sensivity then without
-
-  @param columnName the name of the column
-  @return the column index of the given column name
-}
 function TZAbstractResultSetMetadata.FindColumn(const ColumnName: string): Integer;
 var
   I: Integer;
-  ColumnNameUpper: string;
+  ColumnNameLower: string;
 begin
   { Search for case sensitive columns. }
   for I := FirstDbcIndex to GetColumnCount{$IFDEF GENERIC_INDEX}-1{$ENDIF} do
-    if GetColumnLabel(I) = ColumnName then
-    begin
+    if GetColumnLabel(I) = ColumnName then begin
       Result := I;
       Exit;
     end;
-
   { Search for case insensitive columns. }
-  ColumnNameUpper := AnsiUpperCase(ColumnName);
-  for I := FirstDbcIndex to GetColumnCount{$IFDEF GENERIC_INDEX}-1{$ENDIF} do
-    if AnsiUpperCase(GetColumnLabel(I)) = ColumnNameUpper then
+  ColumnNameLower := AnsiLowerCase(ColumnName);
+  if FColumnsLabelsCI <> nil then begin//alive only if caseinsensitive duplicates exist (to find fields of DataSetLogic)
+    Result := FColumnsLabelsCI.IndexOf(ColumnNameLower);
+    if Result > -1 then begin
+      {$IFNDEF GENERIC_INDEX}Inc(Result);{$ENDIF}
+      Exit;
+    end;
+  end else for I := FirstDbcIndex to GetColumnCount{$IFDEF GENERIC_INDEX}-1{$ENDIF} do
+    if AnsiLowerCase(GetColumnLabel(I)) = ColumnNameLower then
     begin
       Result := I;
       Exit;
@@ -363,9 +374,14 @@ end;
 }
 function TZAbstractResultSetMetadata.IsSearchable(ColumnIndex: Integer): Boolean;
 begin
-  if not Loaded then
-     LoadColumns;
-  Result := TZColumnInfo(FResultSet.ColumnsInfo[ColumnIndex {$IFNDEF GENERIC_INDEX}-1{$ENDIF}]).Searchable;
+  with TZColumnInfo(FResultSet.ColumnsInfo[ColumnIndex {$IFNDEF GENERIC_INDEX}-1{$ENDIF}]) do
+    if SearchableDisabled then
+      Result := False
+    else begin
+      if not Loaded then
+        LoadColumns;
+      Result := Searchable;
+    end;
 end;
 
 {**
@@ -409,16 +425,18 @@ end;
   @return the suggested column title
 }
 function TZAbstractResultSetMetadata.GetColumnLabel(ColumnIndex: Integer): string;
-var
-  I, J, N: Integer;
-  ColumnName, OrgLabel: string;
-  ColumnsInfo: TObjectList;
-  B: Boolean;
-begin
-  { Prepare unique column labels. }
-  if FColumnsLabels = nil then begin
+  procedure FillListAndMakeUnique;
+  var
+    I, J, N: Integer;
+    ColumnName, OrgLabel: string;
+    ColumnsInfo: TObjectList;
+    B, HasLowerLabelDuplicates: Boolean;
+  begin
     ColumnsInfo := FResultSet.ColumnsInfo;
-    FColumnsLabels := TStringList.Create;
+    FColumnsLabelsCS := TStringList.Create;
+    FColumnsLabelsCI := TStringList.Create;
+    HasLowerLabelDuplicates := False;
+    { fills a case sensitive unique list }
     for I := 0 to ColumnsInfo.Count - 1 do begin
       N := 0;
       ColumnName := TZColumnInfo(ColumnsInfo[I]).ColumnLabel;
@@ -438,9 +456,27 @@ begin
         if N > 0 then
           ColumnName := OrgLabel + '_' + ZFastCode.IntToStr(N);
       Until Not b;
-      FColumnsLabels.Add(ColumnName);
+      FColumnsLabelsCS.Add(ColumnName);
     end;
+    { fills a case insensitive unique list }
+    for I := 0 to FColumnsLabelsCS.Count - 1 do begin
+      N := 0;
+      OrgLabel := FColumnsLabelsCS[I];
+      ColumnName := AnsiLowerCase(OrgLabel);
+      while FColumnsLabelsCI.IndexOf(ColumnName) > -1 do begin
+        Inc(N);
+        ColumnName := OrgLabel + '_' + ZFastCode.IntToStr(N);
+        HasLowerLabelDuplicates := True;
+      end;
+      FColumnsLabelsCI.Add(ColumnName);
+    end;
+    if not HasLowerLabelDuplicates then
+      FreeAndNil(FColumnsLabelsCI);
   end;
+begin
+  { Prepare unique column labels. }
+  if FColumnsLabelsCS = nil then
+    FillListAndMakeUnique;
   Result := ColumnsLabels[ColumnIndex{$IFNDEF GENERIC_INDEX} - 1{$ENDIF}];
 end;
 
@@ -759,7 +795,7 @@ var
 begin
   { Initializes single columns with specified table. }
   FieldRef := SelectSchema.LinkFieldByIndexAndShortName(ColumnIndex,
-    ColumnInfo.ColumnLabel, IdentifierConvertor);
+    ColumnInfo.ColumnLabel, IdentifierConverter);
   if ReadColumnByRef(FieldRef, ColumnInfo) then //else double processing down below
     Exit;
  //EH commented: http://zeoslib.sourceforge.net/viewtopic.php?f=40&t=71516&start=15
@@ -773,8 +809,8 @@ begin
   while {(ColumnInfo.ColumnName = '') and }(I < SelectSchema.TableCount) and not Found do begin
     TableRef := SelectSchema.Tables[I];
     if Assigned(FieldRef)
-    then AName := IdentifierConvertor.ExtractQuote(FieldRef.Field)
-    else AName := IdentifierConvertor.ExtractQuote(ColumnInfo.ColumnLabel);
+    then AName := IdentifierConverter.ExtractQuote(FieldRef.Field)
+    else AName := IdentifierConverter.ExtractQuote(ColumnInfo.ColumnLabel);
     Found := ReadColumnByName(AName, TableRef, ColumnInfo);
     Inc(I);
   end;
@@ -934,9 +970,26 @@ procedure TZAbstractResultSetMetadata.SetMetadata(
 begin
   FMetadata := Value;
   if Value<>nil then
-    FIdentifierConvertor := Value.GetIdentifierConvertor
+    FIdentifierConverter := Value.GetIdentifierConverter
   else
-    FIdentifierConvertor := TZDefaultIdentifierConvertor.Create(FMetadata);
+    FIdentifierConverter := TZDefaultIdentifierConverter.Create(FMetadata);
+end;
+
+procedure TZAbstractResultSetMetadata.SetSearchable(ColumnIndex: Integer;
+  Value: Boolean);
+begin
+  with TZColumnInfo(FResultSet.ColumnsInfo[ColumnIndex {$IFNDEF GENERIC_INDEX}-1{$ENDIF}]) do
+    SearchableDisabled := not Value;
+end;
+
+procedure TZAbstractResultSetMetadata.SetReadOnly(ColumnIndex: Integer;
+  Value: Boolean);
+begin
+  with TZColumnInfo(FResultSet.ColumnsInfo[ColumnIndex {$IFNDEF GENERIC_INDEX}-1{$ENDIF}]) do
+    if Value <> ReadOnly then
+      if Value
+      then ReadOnly := True
+      else ReadOnly := IsWritable(ColumnIndex);
 end;
 
 procedure TZAbstractResultSetMetadata.SetReadOnlyFromGetColumnsRS(
@@ -983,7 +1036,7 @@ begin
   StatementAnalyser := Driver.GetStatementAnalyser;
   SelectSchema := StatementAnalyser.DefineSelectSchemaFromQuery(Tokenizer, SQL);
   if Assigned(SelectSchema) then begin
-    SelectSchema.LinkReferences(IdentifierConvertor);
+    SelectSchema.LinkReferences(IdentifierConverter);
     ReplaceStarColumns(SelectSchema);
     FillByIndices := SelectSchema.FieldCount = FResultSet.ColumnsInfo.Count;
     J := -1;

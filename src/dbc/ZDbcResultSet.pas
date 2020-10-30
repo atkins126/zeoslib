@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -100,6 +100,7 @@ type
     procedure CheckBlobColumn(ColumnIndex: Integer);
     procedure Open; virtual;
 
+    procedure AfterClose; virtual;
     function GetColumnIndex(const ColumnName: string): Integer;
     property RowNo: Integer read FRowNo write FRowNo;
     property LastRowNo: Integer read FLastRowNo write FLastRowNo;
@@ -123,13 +124,39 @@ type
     procedure SetType(Value: TZResultSetType);
     procedure SetConcurrency(Value: TZResultSetConcurrency);
 
-    function Next: Boolean; virtual;
     procedure BeforeClose; virtual;
+    /// <summary>Releases this <c>ResultSet</c> object's database and resources
+    ///  immediately instead of waiting for this to happen when it is
+    ///  automatically closed. Note: A <c>ResultSet</c> object is automatically
+    ///  closed by the <c>Statement</c> object that generated it when that
+    ///  <c>Statement</c> object is closed, or is used to retrieve the next
+    ///  result from a sequence of multiple results. A <c>ResultSet</c> object
+    ///  is also automatically closed when it is garbage collected.</summary>
     procedure Close; virtual;
-    procedure AfterClose; virtual;
+    /// <summary>Resets the Cursor position to beforeFirst, releases server and
+    ///  client resources but keeps buffers or Column-Informations alive.</summary>
     procedure ResetCursor; virtual;
-    function WasNull: Boolean; //virtual;
+    /// <summary>Reports whether the last column read had a value of SQL
+    ///  <c>NULL</c>. Note that you must first call one of the <c>getXXX</c>
+    ///  methods on a column to try to read its value and then call the method
+    ///  <c>wasNull</c> to see if the value read was SQL <c>NULL</c>.</summary>
+    /// <returns><c>true</c> if the last column value read was SQL <c>NULL</c>
+    ///  and <c>false</c> otherwise.</returns>
+    function WasNull: Boolean;
+    /// <summary>Indicates whether the this <c>ResultSet</c> is closed.</summary>
+    /// <returns><c>true</c> if closed; <c>false</c> otherwise.</returns>
     function IsClosed: Boolean;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); virtual;
 
     //======================================================================
@@ -214,17 +241,100 @@ type
     // Traversal/Positioning
     //---------------------------------------------------------------------
 
+    /// <summary>Moves the cursor down one row from its current position. A
+    ///  <c>ResultSet</c> cursor is initially positioned before the first row;
+    ///  the first call to the method <c>next</c> makes the first row the
+    ///  current row; the second call makes the second row the current row, and
+    ///  so on. If an input stream is open for the current row, a call to the
+    ///  method <c>next</c> will implicitly close it. A <c>ResultSet</c>
+    ///  object's warning chain is cleared when a new row is read.</summary>
+    /// <returns><c>true</c> if the new current row is valid; <c>false</c> if
+    ///  there are no more rows</returns>
+    function Next: Boolean; virtual;
+    /// <summary>Indicates whether the cursor is before the first row in this
+    ///  <c>ResultSet</c> object.</summary>
+    /// <returns><c>true</c> if the cursor is before the first row; <c>false</c>
+    ///  if the cursor is at any other position or the result set contains no
+    ///  rows</returns>
     function IsBeforeFirst: Boolean; virtual;
+    /// <summary>Indicates whether the cursor is after the last row in this
+    ///  <c>ResultSet</c> object.</summary>
+    /// <returns><c>true</c> if the cursor is after the last row; <c>false</c>
+    ///  if the cursor is at any other position or the result set contains no
+    ///  rows</returns>
     function IsAfterLast: Boolean; virtual;
+    /// <summary>Indicates whether the cursor is on the first row of this
+    ///  <c>ResultSet</c> object.<summary>
+    /// <returns><c>true</c> if the cursor is on the first row;
+    ///  <c>false</c> otherwise.</returns>
     function IsFirst: Boolean; virtual;
+    /// <summary>Indicates whether the cursor is on the last row of this
+    ///  <c>ResultSet</c> object. Note: Calling the method <c>isLast</c> may be
+    ///  expensive because the driver might need to fetch ahead one row in order
+    ///  to determine whether the current row is the last row in the result set.
+    /// </summary>
+    /// <returns><c>true</c> if the cursor is on the last row;
+    ///  <c>false</c> otherwise.</returns>
     function IsLast: Boolean; virtual;
+    /// <summary>Moves the cursor to the top of this <c>ResultSet</c> interface,
+    ///  just before the first row.</summary>
     procedure BeforeFirst; virtual;
+    /// <summary>Moves the cursor to the end of this <c>ResultSet</c> interface,
+    ///  just after the last row. This method has no effect if the result set
+    ///  contains no rows.</summary>
     procedure AfterLast; virtual;
+    /// <summary>Moves the cursor to the first row in this <c>ResultSet</c>
+    ///  object.</summary>
+    /// <returns><c>true</c> if the cursor is on a valid row; <c>false</c> if
+    ///  there are no rows in the resultset</returns>
     function First: Boolean; virtual;
+    /// <summary>Moves the cursor to the last row in this <c>ResultSet</c>
+    ///  object.</summary>
+    /// <returns><c>true</c> if the cursor is on a valid row; <c>false</c> if
+    ///  there are no rows in the result set </returns>
     function Last: Boolean; virtual;
+    /// <summary>Retrieves the current row number. The first row is number 1,
+    ///  the second number 2, and so on.
+    /// <returns>the current row number; <c>0</c> if there is no current row
+    /// <returns>
     function GetRow: NativeInt; virtual;
+    /// <summary>Moves the cursor to the given row number in
+    ///  this <c>ResultSet</c> object. If the row number is positive, the cursor
+    ///  moves to the given row number with respect to the beginning of the
+    ///  result set. The first row is row 1, the second is row 2, and so on.
+    ///  If the given row number is negative, the cursor moves to
+    ///  an absolute row position with respect to the end of the result set.
+    ///  For example, calling the method <c>absolute(-1)</c> positions the
+    ///  cursor on the last row; calling the method <c>absolute(-2)</c>
+    ///  moves the cursor to the next-to-last row, and so on. An attempt to
+    ///  position the cursor beyond the first/last row in the result set leaves
+    ///  the cursor before the first row or after the last row.
+    ///  <B>Note:</B> Calling <c>absolute(1)</c> is the same
+    ///  as calling <c>first()</c>. Calling <c>absolute(-1)</c>
+    ///  is the same as calling <c>last()</c>.</summary>
+    /// <param>"Row" the absolute position to be moved.</param>
+    /// <returns><c>true</c> if the cursor is on the result set;<c>false</c>
+    ///  otherwise</returns>
     function MoveAbsolute(Row: Integer): Boolean; virtual;
+    /// <summary>Moves the cursor a relative number of rows, either positive
+    ///  or negative. Attempting to move beyond the first/last row in the
+    ///  result set positions the cursor before/after the the first/last row.
+    ///  Calling <c>relative(0)</c> is valid, but does not change the cursor
+    ///  position. Note: Calling the method <c>relative(1)</c> is different
+    ///  from calling the method <c>next()</c> because is makes sense to call
+    ///  <c>next()</c> when there is no current row, for example, when the
+    ///  cursor is positioned before the first row or after the last row of the
+    ///  result set. </summary>
+    /// <param>"Rows" the relative number of rows to move the cursor.</param>
+    /// <returns><c>true</c> if the cursor is on a row;<c>false</c> otherwise
+    /// </returns>
     function MoveRelative(Rows: Integer): Boolean; virtual;
+    /// <summary>Moves the cursor to the previous row in this <c>ResultSet</c>
+    ///  interface. Note: Calling the method <c>previous()</c> is not the same
+    ///  as calling the method <c>relative(-1)</c> because it makes sense to
+    ///  call<c>previous()</c> when there is no current row.</summary>
+    /// <returns><c>true</c> if the cursor is on a valid row; <c>false</c> if it
+    ///  is off the result set</returns>
     function Previous: Boolean; virtual;
 
     //---------------------------------------------------------------------
@@ -368,7 +478,7 @@ type
     procedure AfterConstruction; override;
   end;
 
-  //sequential stream with faket interface implementationm, not refcounted
+  //EH: sequential stream with faket interface implementationm, not refcounted
   //aim is to have a object which can handle connection loss
   TZImmediatelyReleasableLobStream = class(TStream, IImmediatelyReleasable)
   protected
@@ -381,6 +491,17 @@ type
     constructor Create(const OwnerLob: IZLob; const Owner: IImmediatelyReleasable; const OpenLobStreams: TZSortedList);
     destructor Destroy; override;
   public //IImmediatelyReleasable
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); virtual;
     function GetConSettings: PZConSettings;
   protected //implement fakes IInterface
@@ -396,7 +517,7 @@ type
   protected
     FWeakRefOfBlob, FWeakRefOfClob: Pointer;
     FColumnCodePage, RawControlsCP: Word;
-    FIsUpdated: Boolean;
+    FIsUpdated, FReleased: Boolean;
     FLobStreamMode: TZLobStreamMode;
     FConSettings: PZConSettings;
     FOnUpdateHandler: TOnLobUpdate;
@@ -1147,19 +1268,6 @@ begin
   end;
 end;
 
-{**
-  Releases this <code>ResultSet</code> object's database and
-  JDBC resources immediately instead of waiting for
-  this to happen when it is automatically closed.
-
-  <P><B>Note:</B> A <code>ResultSet</code> object
-  is automatically closed by the
-  <code>Statement</code> object that generated it when
-  that <code>Statement</code> object is closed,
-  re-executed, or is used to retrieve the next result from a
-  sequence of multiple results. A <code>ResultSet</code> object
-  is also automatically closed when it is garbage collected.
-}
 procedure TZAbstractResultSet.Close;
 var RefCountAdded: Boolean;
 begin
@@ -1189,17 +1297,6 @@ begin
   end;
 end;
 
-{**
-  Reports whether
-  the last column read had a value of SQL <code>NULL</code>.
-  Note that you must first call one of the <code>getXXX</code> methods
-  on a column to try to read its value and then call
-  the method <code>wasNull</code> to see if the value read was
-  SQL <code>NULL</code>.
-
-  @return <code>true</code> if the last column value read was SQL
-    <code>NULL</code> and <code>false</code> otherwise
-}
 function TZAbstractResultSet.WasNull: Boolean;
 begin
   Result := LastWasNull;
@@ -2354,14 +2451,6 @@ end;
 // Traversal/Positioning
 //---------------------------------------------------------------------
 
-{**
-  Indicates whether the cursor is before the first row in
-  this <code>ResultSet</code> object.
-
-  @return <code>true</code> if the cursor is before the first row;
-    <code>false</code> if the cursor is at any other position or the
-    result set contains no rows
-}
 function TZAbstractResultSet.IsBeforeFirst: Boolean;
 begin
   Result := (FRowNo = 0);
@@ -2372,42 +2461,16 @@ begin
   Result := fClosed;
 end;
 
-{**
-  Indicates whether the cursor is after the last row in
-  this <code>ResultSet</code> object.
-
-  @return <code>true</code> if the cursor is after the last row;
-    <code>false</code> if the cursor is at any other position or the
-    result set contains no rows
-}
 function TZAbstractResultSet.IsAfterLast: Boolean;
 begin
   Result := {(FLastRowNo > 0) and} (FRowNo > FLastRowNo);
 end;
 
-{**
-  Indicates whether the cursor is on the first row of
-  this <code>ResultSet</code> object.
-
-  @return <code>true</code> if the cursor is on the first row;
-    <code>false</code> otherwise
-}
 function TZAbstractResultSet.IsFirst: Boolean;
 begin
   Result := (FRowNo = 1);
 end;
 
-{**
-  Indicates whether the cursor is on the last row of
-  this <code>ResultSet</code> object.
-  Note: Calling the method <code>isLast</code> may be expensive
-  because the JDBC driver
-  might need to fetch ahead one row in order to determine
-  whether the current row is the last row in the result set.
-
-  @return <code>true</code> if the cursor is on the last row;
-    <code>false</code> otherwise
-}
 function TZAbstractResultSet.IsLast: Boolean;
 begin
   Result := {(FLastRowNo > 0) and} (FRowNo = FLastRowNo);
@@ -2428,11 +2491,6 @@ begin
   MoveAbsolute(0);
 end;
 
-{**
-  Moves the cursor to the end of
-  this <code>ResultSet</code> object, just after the
-  last row. This method has no effect if the result set contains no rows.
-}
 procedure TZAbstractResultSet.AfterClose;
 begin
   FColumnsInfo.Clear;
@@ -2444,67 +2502,21 @@ begin
   Next;
 end;
 
-{**
-  Moves the cursor to the first row in
-  this <code>ResultSet</code> object.
-
-  @return <code>true</code> if the cursor is on a valid row;
-  <code>false</code> if there are no rows in the result set
-}
 function TZAbstractResultSet.First: Boolean;
 begin
   Result := MoveAbsolute(1);
 end;
 
-{**
-  Moves the cursor to the last row in
-  this <code>ResultSet</code> object.
-
-  @return <code>true</code> if the cursor is on a valid row;
-    <code>false</code> if there are no rows in the result set
-}
 function TZAbstractResultSet.Last: Boolean;
 begin
   Result := MoveAbsolute(FLastRowNo);
 end;
 
-{**
-  Retrieves the current row number.  The first row is number 1, the
-  second number 2, and so on.
-  @return the current row number; <code>0</code> if there is no current row
-}
 function TZAbstractResultSet.GetRow: NativeInt;
 begin
   Result := FRowNo;
 end;
 
-{**
-  Moves the cursor to the given row number in
-  this <code>ResultSet</code> object.
-
-  <p>If the row number is positive, the cursor moves to
-  the given row number with respect to the
-  beginning of the result set.  The first row is row 1, the second
-  is row 2, and so on.
-
-  <p>If the given row number is negative, the cursor moves to
-  an absolute row position with respect to
-  the end of the result set.  For example, calling the method
-  <code>absolute(-1)</code> positions the
-  cursor on the last row; calling the method <code>absolute(-2)</code>
-  moves the cursor to the next-to-last row, and so on.
-
-  <p>An attempt to position the cursor beyond the first/last row in
-  the result set leaves the cursor before the first row or after
-  the last row.
-
-  <p><B>Note:</B> Calling <code>absolute(1)</code> is the same
-  as calling <code>first()</code>. Calling <code>absolute(-1)</code>
-  is the same as calling <code>last()</code>.
-
-  @return <code>true</code> if the cursor is on the result set;
-    <code>false</code> otherwise
-}
 {$IFDEF FPC} {$PUSH}
   {$WARN 5024 off : Parameter "$1" not used}
   {$WARN 5033 off : Function result does not seem to be set}
@@ -2515,59 +2527,16 @@ begin
 end;
 {$IFDEF FPC} {$POP} {$ENDIF}
 
-{**
-  Moves the cursor a relative number of rows, either positive or negative.
-  Attempting to move beyond the first/last row in the
-  result set positions the cursor before/after the
-  the first/last row. Calling <code>relative(0)</code> is valid, but does
-  not change the cursor position.
-
-  <p>Note: Calling the method <code>relative(1)</code>
-  is different from calling the method <code>next()</code>
-  because is makes sense to call <code>next()</code> when there
-  is no current row,
-  for example, when the cursor is positioned before the first row
-  or after the last row of the result set.
-
-  @return <code>true</code> if the cursor is on a row;
-    <code>false</code> otherwise
-}
 function TZAbstractResultSet.MoveRelative(Rows: Integer): Boolean;
 begin
   Result := MoveAbsolute(FRowNo + Rows);
 end;
 
-{**
-  Moves the cursor to the previous row in this
-  <code>ResultSet</code> object.
-
-  <p><B>Note:</B> Calling the method <code>previous()</code> is not the same as
-  calling the method <code>relative(-1)</code> because it
-  makes sense to call</code>previous()</code> when there is no current row.
-
-  @return <code>true</code> if the cursor is on a valid row;
-    <code>false</code> if it is off the result set
-}
 function TZAbstractResultSet.Previous: Boolean;
 begin
   Result := MoveAbsolute(FRowNo - 1);
 end;
 
-{**
-  Moves the cursor down one row from its current position.
-  A <code>ResultSet</code> cursor is initially positioned
-  before the first row; the first call to the method
-  <code>next</code> makes the first row the current row; the
-  second call makes the second row the current row, and so on.
-
-  <P>If an input stream is open for the current row, a call
-  to the method <code>next</code> will
-  implicitly close it. A <code>ResultSet</code> object's
-  warning chain is cleared when a new row is read.
-
-  @return <code>true</code> if the new current row is valid;
-    <code>false</code> if there are no more rows
-}
 function TZAbstractResultSet.Next: Boolean;
 begin
   Result := MoveAbsolute(FRowNo + 1);
@@ -3414,13 +3383,19 @@ end;
 procedure TZAbstractResultSet.ReleaseImmediat(const Sender: IImmediatelyReleasable;
   var AError: EZSQLConnectionLost);
 var ImmediatelyReleasable: IImmediatelyReleasable;
+  i: Integer;
 begin
-  if not FClosed and Assigned(Statement){virtual RS ! } then
-  begin
+  if not FClosed and Assigned(Statement){virtual RS ! } then begin
+    FColumnsInfo.Clear;
     FClosed := True;
     FRowNo := 0;
     FLastRowNo := 0;
     LastWasNull := True;
+    for I := FOpenLobStreams.Count -1 downto 0 do
+      if (FOpenLobStreams[0] <> nil) and TObject(FOpenLobStreams[i]).GetInterface(IImmediatelyReleasable, ImmediatelyReleasable)
+        and (Sender <> ImmediatelyReleasable) then
+          ImmediatelyReleasable.ReleaseImmediat(Sender, AError);
+    FOpenLobStreams.Clear;
     if Supports(Statement, IImmediatelyReleasable, ImmediatelyReleasable) and
        (ImmediatelyReleasable <> Sender) then
       ImmediatelyReleasable.ReleaseImmediat(Sender, AError);
@@ -4393,7 +4368,8 @@ destructor TZImmediatelyReleasableLobStream.Destroy;
 var Idx: Integer;
 begin
   Idx := FOpenLobStreams.IndexOf(Pointer(Self));
-  FOpenLobStreams.Delete(Idx);
+  if idx >= 0 then
+    FOpenLobStreams.Delete(Idx);
   inherited;
 end;
 
@@ -4412,8 +4388,17 @@ end;
 
 procedure TZImmediatelyReleasableLobStream.ReleaseImmediat(
   const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
+var idx: Integer;
+  imm: IImmediatelyReleasable;
 begin
+  if FReleased then Exit;
   FReleased := True;
+  Idx := FOpenLobStreams.IndexOf(Pointer(Self));
+  if idx >= 0 then
+    FOpenLobStreams.Delete(Idx);
+  if (FOwnerLob <> nil) and (FOwnerLob.QueryInterface(IImmediatelyReleasable, Imm) = S_OK) and
+     (imm <> Sender) then
+    Imm.ReleaseImmediat(Sender, AError);
   if (FOwner <> Sender) and (FOwner <> nil) then
      FOwner.ReleaseImmediat(Sender, AError);
 end;

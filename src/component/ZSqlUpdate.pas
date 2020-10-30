@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -139,6 +139,7 @@ type
     procedure DefineProperties(Filer: TFiler); override;
 
     procedure SetTransaction(const Value: IZTransaction);
+    function HasAutoCommitTransaction: Boolean;
     procedure CalculateDefaults(const Sender: IZCachedResultSet;
       const RowAccessor: TZRowAccessor);
     procedure PostUpdates(const Sender: IZCachedResultSet; UpdateType: TZRowUpdateType;
@@ -298,6 +299,13 @@ begin
   else
     Result := FDeleteSQL;
   end;
+end;
+
+function TZUpdateSQL.HasAutoCommitTransaction: Boolean;
+begin
+  if (FTransaction <> nil)
+  then Result := FTransaction.GetAutoCommit
+  else Result := TZAbstractRODataset(Dataset).Connection.AutoCommit;
 end;
 
 {**
@@ -870,9 +878,12 @@ begin
     {$IFDEF WITH_CASE_WARNING}else;{$ENDIF}// do nothing
   end;
 
-  if Dataset is TZAbstractRODataset then
+  if (Dataset is TZAbstractRODataset) then
     (Dataset as TZAbstractRODataset).Connection.ShowSqlHourGlass;
-  CalcDefaultValues := ZSysUtils.StrToBoolEx(DefineStatementParameter(Sender.GetStatement, DSProps_Defaults, 'true'));
+  if (Dataset is TZAbstractDataset) then
+    CalcDefaultValues := doCalcDefaults in (Dataset as TZAbstractDataset).Options
+  else CalcDefaultValues := False;
+    //(Dataset as TZAbstractRODataset). ZSysUtils.StrToBoolEx(DefineStatementParameter(Sender.GetStatement, DSProps_Defaults, 'true'));
   try
     for I := 0 to Config.StatementCount - 1 do begin
       if (FStmts[UpdateType].Count <= i) or not (FStmts[UpdateType][i].QueryInterface(IZPreparedStatement, Statement) = S_OK) or

@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -202,15 +202,6 @@ const
     from Connection properties retrieved. If it is empty too, the default value
     is returned (usually empty string for options of type STR) }
 
-  // Type: all | changed
-  // Same as Dataset.UpdateMode property
-  DSProps_Update = 'update';
-  // Type: all | keyonly
-  // Same as Dataset.WhereMode property
-  DSProps_Where = 'where';
-  // Type: BOOLEAN
-  // Same as TZDatasetOptions.doCalcDefaults in Dataset.Options property
-  DSProps_Defaults = 'defaults';
   // Type: BOOLEAN
   // Same as TZDatasetOptions.doPreferPrepared in Dataset.Options property
   DSProps_PreferPrepared = 'PreferPrepared';
@@ -423,6 +414,32 @@ const
   ConnProps_MYSQL_OPT_TLS_CIPHERSUITES            = 'MYSQL_OPT_TLS_CIPHERSUITES';
   ConnProps_MYSQL_OPT_COMPRESSION_ALGORITHMS      = 'MYSQL_OPT_COMPRESSION_ALGORITHMS';
   ConnProps_MYSQL_OPT_ZSTD_COMPRESSION_LEVEL      = 'MYSQL_OPT_ZSTD_COMPRESSION_LEVEL';
+  {MariaDB Connector specific }
+  ConnProps_MYSQL_DATABASE_DRIVER                 = 'MYSQL_DATABASE_DRIVER';
+  ConnProps_MARIADB_OPT_SSL_FP                    = 'MARIADB_OPT_SSL_FP';
+  ConnProps_MARIADB_OPT_SSL_FP_LIST               = 'MARIADB_OPT_SSL_FP_LIST';
+  ConnProps_MARIADB_OPT_TLS_PASSPHRASE            = 'MARIADB_OPT_TLS_PASSPHRASE';
+  ConnProps_MARIADB_OPT_TLS_CIPHER_STRENGTH       = 'MARIADB_OPT_TLS_CIPHER_STRENGTH';
+  ConnProps_MARIADB_OPT_TLS_VERSION               = 'MARIADB_OPT_TLS_VERSION';
+  ConnProps_MARIADB_OPT_TLS_PEER_FP               = 'MARIADB_OPT_TLS_PEER_FP';
+  ConnProps_MARIADB_OPT_TLS_PEER_FP_LIST          = 'MARIADB_OPT_TLS_PEER_FP_LIST';
+  ConnProps_MARIADB_OPT_CONNECTION_READ_ONLY      = 'MARIADB_OPT_CONNECTION_READ_ONLY';
+  ConnProps_MYSQL_OPT_CONNECT_ATTRS               = 'MYSQL_OPT_CONNECT_ATTRS';
+  ConnProps_MARIADB_OPT_USERDATA                  = 'MARIADB_OPT_USERDATA';
+  ConnProps_MARIADB_OPT_CONNECTION_HANDLER        = 'MARIADB_OPT_CONNECTION_HANDLER';
+  ConnProps_MARIADB_OPT_PORT                      = 'MARIADB_OPT_PORT';
+  ConnProps_MARIADB_OPT_UNIXSOCKET                = 'MARIADB_OPT_UNIXSOCKET';
+  ConnProps_MARIADB_OPT_PASSWORD                  = 'MARIADB_OPT_PASSWORD';
+  ConnProps_MARIADB_OPT_HOST                      = 'MARIADB_OPT_HOST';
+  ConnProps_MARIADB_OPT_USER                      = 'MARIADB_OPT_USER';
+  ConnProps_MARIADB_OPT_SCHEMA                    = 'MARIADB_OPT_SCHEMA';
+  ConnProps_MARIADB_OPT_DEBUG                     = 'MARIADB_OPT_DEBUG';
+  ConnProps_MARIADB_OPT_FOUND_ROWS                = 'MARIADB_OPT_FOUND_ROWS';
+  ConnProps_MARIADB_OPT_MULTI_RESULTS             = 'MARIADB_OPT_MULTI_RESULTS';
+  ConnProps_MARIADB_OPT_MULTI_STATEMENTS          = 'MARIADB_OPT_MULTI_STATEMENTS';
+  ConnProps_MARIADB_OPT_INTERACTIVE               = 'MARIADB_OPT_INTERACTIVE';
+  ConnProps_MARIADB_OPT_PROXY_HEADER              = 'MARIADB_OPT_PROXY_HEADER';
+  ConnProps_MARIADB_OPT_IO_WAIT                   = 'MARIADB_OPT_IO_WAIT';
 
   { Parameters that are for datasets and statements but could be set for connections
     (see comment above) }
@@ -434,6 +451,8 @@ const
   // So you can't use it within using metainformations or multiple active
   // resultsets!
   DSProps_UseResult = 'UseResult';
+  // Type: BOOLEAN
+  DSProps_MySQLUseDefaults = 'UseDefaults';
   // Type: INT
   // Sets STMT_ATTR_PREFETCH_ROWS option, refer to MySql manual for details
   DSProps_PrefetchRows = 'prefetch_rows';
@@ -722,10 +741,26 @@ const
   // if Value is 'EXCLUSIVE' we're assuming you want emulate a ReadCommitted transaction
   // which blocks read transactions while the transaction is underway
   TxnProps_TransactionBehaviour = 'TransactionBehaviour';
-  // Type: BOOLEAN
-  // Treat "INT" fields in any kind as Int64, means ignore all subtypes like
-  // smallint
+  /// <type>Enum</type>
+  /// <usage>Connection</usage>
+  /// <syntax>Properties.Values[DSProps_SQLiteIntAffinity]={False|True}</syntax>
+  /// <values>true|False</values>
+  /// <summary>
+  ///  Treat "INT" fields in any kind as Int64, means ignore all subtypes like
+  ///  [smallint, int32, MEDIUMINT]</summary>
+  /// <default>False</default>
   DSProps_SQLiteIntAffinity = 'SQLiteIntAffinity';
+  /// <type>Integer</type>
+  /// <usage>Connection</usage>
+  /// <syntax>Properties.Values[ConnProps_SQLiteOpenFlags]=value</syntax>
+  /// <values>are defined in ZPlainSqLiteDriver.pas</values>
+  /// <summary>see: https://www.sqlite.org/c3ref/open.html</summary>
+  ConnProps_SQLiteOpen_Flags = 'SQLiteOpen_Flags';
+  /// <type>String</type>
+  /// <usage>Connection</usage>
+  /// <syntax>Properties.Values[ConnProps_SQLiteOpen_zVfs]=value</syntax>
+  /// <summary>see: https://www.sqlite.org/c3ref/open.html</summary>
+  ConnProps_SQLiteOpen_zVfs = 'SQLiteOpen_zVfs';
 {$ENDIF}
 
 {$IFDEF ENABLE_ORACLE}
@@ -747,6 +782,22 @@ const
   // Sets value for OCI_ATTR_PREFETCH_MEMORY option, refer to Oracle manual for details
   DSProps_RowPrefetchSize = 'row_prefetch_size';
 
+  /// <type>Int</type>
+  /// <usage>Connection</usage>
+  /// <syntax>Properties.Values[ConnProps_OCIAuthenticateMode]=mode</syntax>
+  /// <summary>
+  ///  Specifies the various modes of operation.
+  ///  The constants are defined in ZPlainOracleDriver.pas
+  /// </summary>
+  /// <remarks>
+  ///  Valid modes are:
+  ///  OCI_DEFAULT - in this mode, the user session context returned may only ever be set with the same server context specified in svchp. For encoding, the server handle uses the setting in the environment handle.
+  ///  OCI_MIGRATE - in this mode, the new user session context may be set in a service handle with a different server handle. This mode establishes the user session context. To create a migratable session, the service handle must already be set with a non-migratable user session, which becomes the "creator" session of the migratable session. That is, a migratable session must have a non-migratable parent session.
+  ///  OCI_SYSDBA - in this mode, the user is authenticated for SYSDBA access.
+  ///  OCI_SYSOPER - in this mode, the user is authenticated for SYSOPER access.
+  ///  OCI_PRELIM_AUTH - this mode may only be used with OCI_SYSDBA or OCI_SYSOPER to authenticate for certain administration tasks.
+  /// </remarks>
+  ConnProps_OCIAuthenticateMode = 'OCIAuthenticateMode';
 {$ENDIF}
 
 {$IFDEF ENABLE_ASA}

@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -75,14 +75,14 @@ type
 
   { TZGenerateSQLCachedResolver }
 
-  TZGenerateSQLCachedResolver = class (TZAbstractCachedResolver, IZCachedResolver)
+  TZGenerateSQLCachedResolver = class (TZAbstractCachedResolver, IZCachedResolver,
+    IZGenerateSQLCachedResolver)
   private
     FStatement : IZStatement;
     FTransaction: IZTransaction;
     FDatabaseMetadata: IZDatabaseMetadata;
-    FIdentifierConvertor: IZIdentifierConvertor;
+    FIdentifierConverter: IZIdentifierConverter;
 
-    FInsertColumns: TZIndexPairList;
     FUpdateColumns: TZIndexPairList;
     FWhereColumns: TZIndexPairList;
     FCurrentWhereColumns: TZIndexPairList;
@@ -91,10 +91,13 @@ type
     FWhereAll: Boolean;
     FUpdateAll: Boolean;
 
+  protected
     FUpdateStatements: TZHashMap;
     FDeleteStatements: TZHashMap;
-  protected
+    FInsertColumns: TZIndexPairList;
+    FInsertStatements: TZHashMap;
     InsertStatement: IZPreparedStatement;
+    procedure FlushCache(Collection: TZHashMap);
 
     function ComposeFullTableName(const Catalog, Schema, Table: SQLString;
       {$IFDEF AUTOREFCOUNT}const {$ENDIF}SQLWriter: TZSQLStringWriter): SQLString;
@@ -104,7 +107,7 @@ type
     procedure SetResolverStatementParamters(const Statement: IZStatement;
       {$IFDEF AUTOREFCOUNT}const {$ENDIF}Params: TStrings); virtual;
 
-    procedure FillInsertColumnsPairList;
+    procedure FillInsertColumnsPairList(NewRowAccessor: TZRowAccessor);
     procedure FillUpdateColumns(const OldRowAccessor,NewRowAccessor: TZRowAccessor);
     procedure FillWhereKeyColumns(IncrementDestIndexBy: Integer);
     procedure FillWhereAllColumns(IncrementDestIndexBy: Integer;
@@ -113,8 +116,9 @@ type
 
     property DatabaseMetadata: IZDatabaseMetadata read FDatabaseMetadata
       write FDatabaseMetadata;
-    property IdentifierConvertor: IZIdentifierConvertor
-      read FIdentifierConvertor write FIdentifierConvertor;
+    property IdentifierConverter: IZIdentifierConverter
+      read FIdentifierConverter write FIdentifierConverter;
+    property Statement: IZStatement read FStatement;
 
     property UpdateColumnsLookup: TZIndexPairList read FUpdateColumns;
     { all determined WhereColumns cached }
@@ -131,7 +135,7 @@ type
 
     procedure FormWhereClause(const SQLWriter: TZSQLStringWriter;
       const OldRowAccessor: TZRowAccessor; var Result: SQLString); virtual;
-    function FormInsertStatement: SQLString;
+    function FormInsertStatement(NewRowAccessor: TZRowAccessor): SQLString; virtual;
     function FormUpdateStatement(
       const OldRowAccessor, NewRowAccessor: TZRowAccessor): SQLString;
     function FormDeleteStatement(const OldRowAccessor: TZRowAccessor): SQLString;
@@ -139,6 +143,7 @@ type
       const ColumnsLookup: TZIndexPairList): SQLString; virtual;
   public //implement IZCachedResolver
     procedure SetTransaction(const Value: IZTransaction); virtual;
+    function HasAutoCommitTransaction: Boolean;
 
     procedure CalculateDefaults(const Sender: IZCachedResultSet; const RowAccessor: TZRowAccessor);
     procedure PostUpdates(const Sender: IZCachedResultSet;
@@ -149,6 +154,33 @@ type
       const Resolver: IZCachedResolver); virtual;
     {END of PATCH [1185969]: Do tasks after posting updates. ie: Updating AutoInc fields in MySQL }
     procedure RefreshCurrentRow(const Sender: IZCachedResultSet; RowAccessor: TZRowAccessor); //FOS+ 07112006
+    /// <summary>Set the readonly state of a field. The value will be ignored
+    ///  if the field is not writable.</summary>
+    /// <param>"ColumnIndex" the columnnumber of the field.</param>
+    /// <param>"Value" if <c>true</c> then the field will be ignored on
+    ///  generating the dml's.</param>
+    procedure SetReadOnly(ColumnIndex: Integer; Value: Boolean);
+    /// <summary>Set the searchable state of a field. The value will be ignored
+    ///  if the field is not searchable at all e.g. LOB's.</summary>
+    /// <param>"ColumnIndex" the columnnumber of the field.</param>
+    /// <param>"Value" if <c>true</c> then the field will be ignored on
+    ///  generating the where clause of the dml's.</param>
+    procedure SetSearchable(ColumnIndex: Integer; Value: Boolean);
+    /// <summary>Set the Calculate null columns defaults.</summary>
+    /// <param>"Value" <c>true</c> means calc defaults.</param>
+    procedure SetCalcDefaults(Value: Boolean);
+    /// <summary>Set the WhereAll state for generating the where clause of the
+    ///  dml's. The value will be ignored if no indexfields are defined and
+    ///  if no primary key is available. If both conditions are true the
+    ///  whereAll mode is always true.</summary>
+    /// <param>"Value" <c>true</c> means use all searchable columns. Otherwise
+    ///  the primary key will or given index fields are used.</param>
+    procedure SetWhereAll(Value: Boolean);
+    /// <summary>Set the updateAll state for generating the dml's. <c>true</c>
+    ///  means use all updatable columns. Otherwise only changed fields are used
+    ///  for updates.</summary>
+    /// <param>"Value" the UpdateAll mode should be used.</param>
+    procedure SetUpdateAll(Value: Boolean);
   end;
   //just an alias for compatibility
   TZGenericCachedResolver = TZGenerateSQLCachedResolver;
@@ -171,7 +203,7 @@ begin
   Connection := Statement.GetConnection;
   Self.Metadata := Metadata;
   FDatabaseMetadata := Statement.GetConnection.GetMetadata;
-  FIdentifierConvertor := FDatabaseMetadata.GetIdentifierConvertor;
+  FIdentifierConverter := FDatabaseMetadata.GetIdentifierConverter;
 
   FInsertColumns := TZIndexPairList.Create;
 
@@ -179,14 +211,10 @@ begin
   FWhereColumns := TZIndexPairList.Create;
   FCurrentWhereColumns := TZIndexPairList.Create;
 
-  FCalcDefaults := StrToBoolEx(DefineStatementParameter(Statement,
-    DSProps_Defaults, 'true'));
-  FUpdateAll := UpperCase(DefineStatementParameter(Statement,
-    DSProps_Update, 'changed')) = 'ALL';
-  FWhereAll := UpperCase(DefineStatementParameter(Statement,
-    DSProps_Where, 'keyonly')) = 'ALL';
+  FCalcDefaults := True;
   FUpdateStatements := TZHashMap.Create;
   FDeleteStatements := TZHashMap.Create;
+  FInsertStatements := TZHashMap.Create;
 end;
 
 {**
@@ -206,17 +234,22 @@ begin
   FDatabaseMetadata := nil;
 
   FreeAndNil(FInsertColumns);
-
   FreeAndNil(FUpdateColumns);
   FreeAndNil(FWhereColumns);
   FreeAndNil(FCurrentWhereColumns);
 
+  FlushCache(FDeleteStatements);
   FreeAndNil(FDeleteStatements);
+  FlushCache(FUpdateStatements);
   FreeAndNil(FUpdateStatements);
+  FlushCache(FInsertStatements);
+  FreeAndNil(FInsertStatements);
 
   FlustStmt(InsertStatement);
-  if RefreshResultSet <> nil then
-     RefreshResultSet.Close;
+  if RefreshResultSet <> nil then begin
+    RefreshResultSet.Close;
+    RefreshResultSet := nil;
+  end;
   inherited Destroy;
 end;
 
@@ -234,16 +267,16 @@ begin
   Result := '';
   if Table <> '' then begin
     if (Catalog <> '') and FDatabaseMetadata.GetDatabaseInfo.SupportsCatalogsInDataManipulation then begin
-      Tmp := IdentifierConvertor.Quote(Catalog);
+      Tmp := IdentifierConverter.Quote(Catalog, iqCatalog);
       SQLWriter.AddText(Tmp, Result);
       SQLWriter.AddChar('.', Result);
     end;
     if (Schema <> '') and FDatabaseMetadata.GetDatabaseInfo.SupportsSchemasInDataManipulation then begin
-      Tmp := IdentifierConvertor.Quote(Schema);
+      Tmp := IdentifierConverter.Quote(Schema, iqSchema);
       SQLWriter.AddText(Tmp, Result);
       SQLWriter.AddChar('.', Result);
     end;
-    Tmp := IdentifierConvertor.Quote(Table);
+    Tmp := IdentifierConverter.Quote(Table, iqTable);
     SQLWriter.AddText(Tmp, Result);
     SQLWriter.Finalize(Result);
   end;
@@ -262,8 +295,9 @@ begin
   SQLWriter := TZSQLStringWriter.Create(512);
   try
     for I := FirstDbcIndex to Metadata.GetColumnCount{$IFDEF GENERIC_INDEX}-1{$ENDIF} do begin
-      Temp := ComposeFullTableName(Metadata.GetCatalogName(I),
-        Metadata.GetSchemaName(I), Metadata.GetTableName(I), SQLWriter);
+      if not Metadata.IsReadOnly(I) and Metadata.IsWritable(I) then
+        Temp := ComposeFullTableName(Metadata.GetCatalogName(I),
+          Metadata.GetSchemaName(I), Metadata.GetTableName(I), SQLWriter);
       if (Result = '') and (Temp <> '') then
         Result := Temp
       else if (Result <> '') and (Temp <> '') and (Temp <> Result) then
@@ -306,7 +340,7 @@ begin
   FUpdateColumns.Clear;
   { Use precached parameters. }
   if FInsertColumns.Count = 0 then
-    FillInsertColumnsPairList;
+    FillInsertColumnsPairList(NewRowAccessor);
   { Defines parameters for UpdateAll mode. }
   if UpdateAll then
     FUpdateColumns.Assign(FInsertColumns)
@@ -385,8 +419,8 @@ begin
       {For exact results: quote all identifiers SEE: http://sourceforge.net/p/zeoslib/tickets/81/
       If table names have mixed case ConstructNameCondition will return wrong results
       and we fall back to WhereAll}
-      PrimaryKeys := DatabaseMetadata.GetPrimaryKeys(IdentifierConvertor.Quote(Catalog),
-        IdentifierConvertor.Quote(Schema), IdentifierConvertor.Quote(Table));
+      PrimaryKeys := DatabaseMetadata.GetPrimaryKeys(IdentifierConverter.Quote(Catalog, iqCatalog),
+        IdentifierConverter.Quote(Schema, iqSchema), IdentifierConverter.Quote(Table, iqTable));
       while PrimaryKeys.Next do
         if not AddColumn(Table, PrimaryKeys.GetString(ColumnNameIndex), FWhereColumns) then
           Break;
@@ -404,6 +438,22 @@ CopyParams:
       WhereColumnsLookup.Add(IndexPair.SrcOrDestIndex+IncrementDestIndexBy, IndexPair.ColumnIndex)
     end;
   end;
+end;
+
+procedure TZGenerateSQLCachedResolver.FlushCache(Collection: TZHashMap);
+var I: Integer;
+  Values: IZCollection;
+  Stmt: IZStatement;
+  Intf: IZInterface;
+begin
+  if Collection = nil then Exit;
+  Values := Collection.GetValues;
+  for i := 0 to Values.Count -1 do begin
+    Intf := Values[i];
+    if (Intf <> nil) and (Intf.QueryInterface(IZStatement, Stmt) = S_OK) and not Stmt.IsClosed then
+      Stmt.Close;
+  end;
+  Collection.Clear;
 end;
 
 {**
@@ -470,7 +520,7 @@ begin
       SQLWriter.AddText(' AND ', Result);
     IDX := PZIndexPair(FWhereColumns[i]).ColumnIndex;
     Condition := MetaData.GetColumnName(Idx);
-    Condition := IdentifierConvertor.Quote(Condition);
+    Condition := IdentifierConverter.Quote(Condition, iqColumn);
     SQLWriter.AddText(Condition, Result);
     if OldRowAccessor.IsNull(IDX) then begin
       SQLWriter.AddText(' IS NULL', Result);
@@ -484,11 +534,19 @@ begin
   end;
 end;
 
+function TZGenerateSQLCachedResolver.HasAutoCommitTransaction: Boolean;
+begin
+  if FTransaction <> nil
+  then Result := FTransaction.GetAutoCommit
+  else Result := Connection.GetAutoCommit;
+end;
+
 {**
   Forms a INSERT statements.
   @return the composed insert SQL
 }
-function TZGenerateSQLCachedResolver.FormInsertStatement: SQLString;
+function TZGenerateSQLCachedResolver.FormInsertStatement(
+  NewRowAccessor: TZRowAccessor): SQLString;
 var
   I, ColumnIndex: Integer;
   Tmp: SQLString;
@@ -508,15 +566,17 @@ begin
     SQLWriter.AddChar(' ', Result);
     SQLWriter.AddChar('(', Result);
     if FInsertColumns.Count = 0 then
-      FillInsertColumnsPairList;
-    if FInsertColumns.Count = 0 then begin
+      FillInsertColumnsPairList(NewRowAccessor);
+    if (FInsertColumns.Count = 0) and not
+       {test for generated always cols }
+       ((Metadata.GetColumnCount > 0) and Metadata.IsAutoIncrement(FirstDbcIndex)) then begin
       Result := '';
       Exit;
     end;
     for I := 0 to FInsertColumns.Count-1 do begin
       ColumnIndex := PZIndexPair(FInsertColumns[i])^.ColumnIndex;
       Tmp := Metadata.GetColumnName(ColumnIndex);
-      Tmp := IdentifierConvertor.Quote(Tmp);
+      Tmp := IdentifierConverter.Quote(Tmp, iqColumn);
       SQLWriter.AddText(Tmp, Result);
       SQLWriter.AddChar(',', Result);
     end;
@@ -536,7 +596,7 @@ begin
       for I := 0 to Fields.Count - 1 do begin
         if I > 0 then
           SQLWriter.AddChar(',', Result);
-        Tmp := IdentifierConvertor.Quote(Fields[I]);
+        Tmp := IdentifierConverter.Quote(Fields[I], iqColumn);
         SQLWriter.AddText(Tmp, Result);
       end;
       Fields.Free;
@@ -577,7 +637,7 @@ begin
       if I > 0 then
         SQLWriter.AddChar(',', Result);
       Temp := MetaData.GetColumnName(ColumnIndex);
-      Temp := IdentifierConvertor.Quote(Temp);
+      Temp := IdentifierConverter.Quote(Temp, iqColumn);
       SQLWriter.AddText(Temp, Result);
       SQLWriter.AddText('=?', Result);
     end;
@@ -615,7 +675,7 @@ begin
   end;
 end;
 
-procedure TZGenerateSQLCachedResolver.FillInsertColumnsPairList;
+procedure TZGenerateSQLCachedResolver.FillInsertColumnsPairList(NewRowAccessor: TZRowAccessor);
 var I, J: Integer;
   Tmp: String;
 begin
@@ -624,7 +684,8 @@ begin
   J := FirstDbcIndex;
   for I := FirstDbcIndex to FInsertColumns.Capacity{$IFDEF GENERIC_INDEX}-1{$ENDIF} do begin
     Tmp := Metadata.GetTableName(I);
-    if (Tmp = '') or not Metadata.IsWritable(I) then continue;
+    if (Tmp = '') or Metadata.IsReadOnly(I) or  not Metadata.IsWritable(I) or
+       (Metadata.IsAutoIncrement(I) and NewRowAccessor.IsNull(I)) then continue;
     Tmp := Metadata.GetColumnName(I);
     if Tmp <> '' then begin
       FInsertColumns.Add(J, I);
@@ -679,6 +740,7 @@ var
   lValidateUpdateCount : Boolean;
   TempKey              : IZAnyValue;
   SenderStatement      : IZStatement;
+  Val                  : IZInterface;
   {$IFDEF WITH_VALIDATE_UPDATE_COUNT}
   function CreateInvalidUpdateCountException: EZSQLException; //suppress _U/LStrArrClear
   begin
@@ -692,17 +754,24 @@ begin
   case UpdateType of
     utInserted:
       begin
-        if (InsertStatement = nil) or InsertStatement.IsClosed then begin
-          SQL := FormInsertStatement;
-          InsertStatement := CreateResolverStatement(SQL);
-          Statement := InsertStatement;
+        if (InsertStatement = nil) or InsertStatement.IsClosed or (FInsertColumns.Count = 0) then begin
+          InsertStatement := nil;
+          SQL := FormInsertStatement(NewRowAccessor);
+          TempKey := TZAnyValue.CreateWithInteger(Hash(SQL));
+          Val := FInsertStatements.Get(TempKey);
+          If (Val = nil) or (Val.QueryInterface(IZPreparedStatement, InsertStatement) <> S_OK) or InsertStatement.IsClosed then begin
+            if (Val <> nil) then
+              FInsertStatements.Remove(TempKey);
+            InsertStatement := CreateResolverStatement(SQL);
+            FInsertStatements.Put(TempKey, InsertStatement);
+          end;
         end;
         Statement := InsertStatement;
         NewRowAccessor.FillStatement(Statement, FInsertColumns, Metadata);
       end;
     utDeleted:
       begin
-        if not FWhereAll then begin
+        if not FWhereAll or (FWhereColumns.Count = 0) then begin
           If (FDeleteStatements.Count = 0) or (FDeleteStatements.Values[0] as IZPreparedStatement).IsClosed then begin
             SQL := FormDeleteStatement(OldRowAccessor);
             Statement := CreateResolverStatement(SQL);
@@ -776,13 +845,13 @@ var Stmt: IZPreparedStatement;
     SQL := 'SELECT ';
     try
       if FInsertColumns.Count = 0 then
-        FillInsertColumnsPairList;
+        FillInsertColumnsPairList(RowAccessor);
       if FInsertColumns.Count = 0 then
         Exit;
       for I := 0 to FInsertColumns.Count-1 do begin
         ColumnIndex := PZIndexPair(FInsertColumns[i])^.ColumnIndex;
         Tmp := Metadata.GetColumnName(ColumnIndex);
-        Tmp := IdentifierConvertor.Quote(Tmp);
+        Tmp := IdentifierConverter.Quote(Tmp, iqColumn);
         SQLWriter.AddText(Tmp, SQL);
         SQLWriter.AddChar(',', SQL);
       end;
@@ -830,16 +899,49 @@ begin
       if (FUpdateStatements.Count > 0) then
         Col := FUpdateStatements.GetValues
       else if (FDeleteStatements.Count > 0) then
-        Col := FDeleteStatements.GetValues;
-      if (Col <> nil) then
-        Col[0].QueryInterface(IZStatement, Stmt);
+        Col := FDeleteStatements.GetValues
+      else if (FInsertStatements.Count > 0) then
+        Col := FInsertStatements.GetValues;
+      if (Col <> nil)
+      then Col[0].QueryInterface(IZStatement, Stmt)
+      else Stmt := nil;
     end;
     { test if statement is part of session -> FB always all others will fail}
     if (Stmt <> nil) and ((Value = nil) or (Stmt.GetConnection <> Value.GetConnection)) then begin
       Stmt.Close;
       InsertStatement := nil;
-      FUpdateStatements.Clear;
-      FDeleteStatements.Clear;
+      FlushCache(FInsertStatements);
+      FlushCache(FUpdateStatements);
+      FlushCache(FDeleteStatements);
+    end;
+  end;
+end;
+
+procedure TZGenerateSQLCachedResolver.SetCalcDefaults(Value: Boolean);
+begin
+  FCalcDefaults := Value;
+end;
+
+procedure TZGenerateSQLCachedResolver.SetUpdateAll(Value: Boolean);
+begin
+  FUpdateAll := Value;
+end;
+
+procedure TZGenerateSQLCachedResolver.SetWhereAll(Value: Boolean);
+begin
+  if FWhereAll <> Value then begin
+    FWhereAll := Value;
+  end;
+end;
+
+procedure TZGenerateSQLCachedResolver.SetReadOnly(ColumnIndex: Integer;
+  Value: Boolean);
+begin
+  if Metadata.IsReadOnly(ColumnIndex) <> Value then begin
+    Metadata.SetReadOnly(ColumnIndex, Value);
+    if Metadata.IsReadOnly(ColumnIndex) = Value then begin
+      FInsertColumns.Clear;
+      FUpdateColumns.Clear;
     end;
   end;
 end;
@@ -848,6 +950,16 @@ procedure TZGenerateSQLCachedResolver.SetResolverStatementParamters(
   const Statement: IZStatement; {$IFDEF AUTOREFCOUNT}const {$ENDIF} Params: TStrings);
 begin
   Params.Assign(Statement.GetParameters);
+end;
+
+procedure TZGenerateSQLCachedResolver.SetSearchable(ColumnIndex: Integer;
+  Value: Boolean);
+begin
+  if Metadata.IsSearchable(ColumnIndex) <> Value then begin
+    Metadata.SetSearchable(ColumnIndex, Value);
+    if Metadata.IsSearchable(ColumnIndex) = Value then
+      FWhereColumns.Clear;
+  end;
 end;
 
 {$IFDEF FPC} {$PUSH} {$WARN 5024 off : Parameter "Sender" not used} {$ENDIF}

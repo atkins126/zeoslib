@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -103,7 +103,7 @@ type
   ///  implements an oracle OCI connection.
   /// </summary>
   {** Implements Oracle Database Connection. }
-  TZOracleConnection = class(TZAbstractSuccedaneousTxnConnection, IZConnection,
+  TZOracleConnection = class(TZAbstractSingleTxnConnection, IZConnection,
     IZOracleConnection, IZTransaction)
   private
     FCatalog: string;
@@ -125,6 +125,7 @@ type
     procedure ExecuteImmediat(const SQL: RawByteString; var Stmt: POCIStmt; LoggingCategory: TZLoggingCategory); overload;
     procedure ExecuteImmediat(const SQL: UnicodeString; var Stmt: POCIStmt; LoggingCategory: TZLoggingCategory); overload;
     procedure InternalSetCatalog(const Catalog: String);
+    procedure FreeAllocatedHandles;
   protected
     procedure InternalClose; override;
     procedure ExecuteImmediat(const SQL: RawByteString; LoggingCategory: TZLoggingCategory); overload; override;
@@ -138,19 +139,99 @@ type
     procedure SetActiveTransaction(const Value: IZTransaction);
   public
     function CreateStatementWithParams(Info: TStrings): IZStatement;
-    function PrepareCallWithParams(const Name: String; Info: TStrings):
+    /// <summary>Creates a <code>CallableStatement</code> object for calling
+    ///  database stored procedures. The <code>CallableStatement</code> object
+    ///  provides methods for setting up its IN and OUT parameters, and methods
+    ///  for executing the call to a stored procedure. Note: This method is
+    ///  optimized for handling stored procedure call statements. Some drivers
+    ///  may send the call statement to the database when the method
+    ///  <c>prepareCall</c> is done; others may wait until the
+    ///  <c>CallableStatement</c> object is executed. This has no direct effect
+    ///  on users; however, it does affect which method throws certain
+    ///  EZSQLExceptions. Result sets created using the returned
+    ///  IZCallableStatement will have forward-only type and read-only
+    ///  concurrency, by default.</summary>
+    /// <param>"Name" a procedure or function name.</param>
+    /// <param>"Params" a statement parameters list.</param>
+    /// <returns> a new IZCallableStatement interface containing the
+    ///  pre-compiled SQL statement <returns>
+    function PrepareCallWithParams(const Name: String; Params: TStrings):
       IZCallableStatement;
     function PrepareStatementWithParams(const SQL: string; Info: TStrings):
       IZPreparedStatement;
 
     function CreateSequence(const Sequence: string; BlockSize: Integer): IZSequence; override;
   public { txn support }
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  released. Otherwise makes all changes made since the previous commit/
+    ///  rollback permanent and releases any database locks currently held by
+    ///  the Connection. This method should be used only when auto-commit mode
+    ///  has been disabled. See setAutoCommit.</summary>
     procedure Commit;
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  rolled back. Otherwise drops all changes made since the previous
+    ///  commit/rollback and releases any database locks currently held by this
+    ///  Connection. This method should be used only when auto-commit has been
+    ///  disabled. See setAutoCommit.</summary>
     procedure Rollback;
+    /// <summary>Puts this connection in read-only mode as a hint to enable
+    ///  database optimizations. Note: This method cannot be called while in the
+    ///  middle of a transaction.</summary>
+    /// <param>"value" true enables read-only mode; false disables read-only
+    ///  mode.</param>
     procedure SetReadOnly(Value: Boolean); override;
+    /// <summary>Sets this connection's auto-commit mode. If a connection is in
+    ///  auto-commit mode, then all its SQL statements will be executed and
+    ///  committed as individual transactions. Otherwise, its SQL statements are
+    ///  grouped into transactions that are terminated by a call to either the
+    ///  method <c>commit</c> or the method <c>rollback</c>. By default, new
+    ///  connections are in auto-commit mode. The commit occurs when the
+    ///  statement completes or the next execute occurs, whichever comes first.
+    ///  In the case of statements returning a ResultSet, the statement
+    ///  completes when the last row of the ResultSet has been retrieved or the
+    ///  ResultSet has been closed. In advanced cases, a single statement may
+    ///  return multiple results as well as output parameter values. In these
+    ///  cases the commit occurs when all results and output parameter values
+    ///  have been retrieved. It is not recommented setting autoCommit to false
+    ///  because a call to either the method <c>commit</c> or the method
+    ///  <c>rollback</c> will restart the transaction. It's use full only if
+    ///  repeately many opertions are done and no startTransaction is intended
+    ///  to use. If you change mode to true the current Transaction and it's
+    ///  nested SavePoints are committed then.</summary>
+    /// <param>"Value" true enables auto-commit; false disables auto-commit.</param>
     procedure SetAutoCommit(Value: Boolean); override;
+    /// <summary>Attempts to change the transaction isolation level to the one
+    ///  given. The constants defined in the interface <c>Connection</c> are the
+    ///  possible transaction isolation levels. Note: This method cannot be
+    ///  called while in the middle of a transaction.
+    /// <param>"value" one of the TRANSACTION_* isolation values with the
+    ///  exception of TRANSACTION_NONE; some databases may not support other
+    ///  values. See DatabaseInfo.SupportsTransactionIsolationLevel</param>
     procedure SetTransactionIsolation(Level: TZTransactIsolationLevel); override;
+    /// <summary>Starts transaction support or saves the current transaction.
+    ///  If the connection is closed, the connection will be opened.
+    ///  If a transaction is underway a nested transaction or a savepoint will
+    ///  be spawned. While the tranaction(s) is/are underway the AutoCommit
+    ///  property is set to False. Ending up the transaction with a
+    ///  commit/rollback the autocommit property will be restored if changing
+    ///  the autocommit mode was triggered by a starttransaction call.</summary>
+    /// <returns>Returns the current txn-level. 1 means a expicit transaction
+    ///  was started. 2 means the transaction was saved. 3 means the previous
+    ///  savepoint got saved too and so on.</returns>
     function StartTransaction: Integer;
+  public
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
+    procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); override;
   public
     function PingServer: Integer; override;
     function AbortOperation: Integer; override;
@@ -217,18 +298,75 @@ type
     //FTXID: TXID;
     {$IFDEF AUTOREFCOUNT}[weak]{$ENDIF}FOwner: TZOracleConnection;
   public { IZTransaction }
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  released. Otherwise makes all changes made since the previous commit/
+    ///  rollback permanent and releases any database locks currently held by
+    ///  the Connection. This method should be used only when auto-commit mode
+    ///  has been disabled. See setAutoCommit.</summary>
     procedure Commit;
     procedure Close;
+    /// <summary>Get's the owner connection that produced that object instance.
+    /// </summary>
+    /// <returns>the connection object interface.</returns>
     function GetConnection: IZConnection;
+    /// <summary>Get the nested transaction level. -1 means no active
+    ///  transaction, 0 means the txn is in AutoCommit-Mode, 1 means a expicit
+    ///  transaction was started. 2 means the transaction was saved. 3 means the
+    ///  previous savepoint got saved too and so on.</summary>
+    /// <returns>Returns the current txn-level. </returns>
     function GetTransactionLevel: Integer;
+    /// <summary>Attempts to change the transaction isolation level to the one
+    ///  given. The constants defined in the interface <c>Connection</c> are the
+    ///  possible transaction isolation levels. Note: This method cannot be
+    ///  called while in the middle of a transaction.
+    /// <param>"value" one of the TRANSACTION_* isolation values with the
+    ///  exception of TRANSACTION_NONE; some databases may not support other
+    ///  values. See DatabaseInfo.SupportsTransactionIsolationLevel</param>
     procedure SetTransactionIsolation(Value: TZTransactIsolationLevel);
+    /// <summary>If the current transaction is saved the current savepoint get's
+    ///  rolled back. Otherwise drops all changes made since the previous
+    ///  commit/rollback and releases any database locks currently held by this
+    ///  Connection. This method should be used only when auto-commit has been
+    ///  disabled. See setAutoCommit.</summary>
     procedure Rollback;
+    /// <summary>Starts transaction support or saves the current transaction.
+    ///  If the connection is closed, the connection will be opened.
+    ///  If a transaction is underway a nested transaction or a savepoint will
+    ///  be spawned. While the tranaction(s) is/are underway the AutoCommit
+    ///  property is set to False. Ending up the transaction with a
+    ///  commit/rollback the autocommit property will be restored if changing
+    ///  the autocommit mode was triggered by a starttransaction call.</summary>
+    /// <returns>Returns the current txn-level. 1 means a expicit transaction
+    ///  was started. 2 means the transaction was saved. 3 means the previous
+    ///  savepoint got saved too and so on.</returns>
     function StartTransaction: Integer;
+    /// <summary>Check if the current transaction is readonly. See setReadonly.
+    ///  </summary>
+    /// <returns><c>True</c> if the transaction is readonly; <c>False</c>
+    ///  otherwise.</returns>
     function IsReadOnly: Boolean;
+    /// <summary>Puts this connection in read-only mode as a hint to enable
+    ///  database optimizations. Note: This method cannot be called while in the
+    ///  middle of a transaction.</summary>
+    /// <param>"value" true enables read-only mode; false disables read-only
+    ///  mode.</param>
     procedure SetReadOnly(Value: Boolean);
+    /// <summary>Gets the current auto-commit state. See setAutoCommit.</summary>
+    /// <returns>the current state of auto-commit mode.</returns>
     function GetAutoCommit: Boolean;
   public { IZOracleTransaction }
     function GetTrHandle: POCITrans;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
     function IsClosed: Boolean;
   public
@@ -341,6 +479,8 @@ procedure TZOracleConnection.ExecuteImmediat(const SQL: RawByteString;
 var Stmt: POCIStmt;
   Status: sword;
 begin
+  if IsClosed then
+    Open;
   if ConSettings.ClientCodePage.ID = OCI_UTF16ID
   then inherited ExecuteImmediat(SQL, LoggingCategory)
   else begin
@@ -405,19 +545,8 @@ var
   R: RawByteString;
   CP: Word;
   {$ENDIF}
-  procedure CleanupOnFail;
-  begin
-    FPlainDriver.OCIHandleFree(FDescibeHandle, OCI_HTYPE_DESCRIBE);
-    FDescibeHandle := nil;
-    FPlainDriver.OCIHandleFree(FContextHandle, OCI_HTYPE_SVCCTX);
-    FContextHandle := nil;
-    FPlainDriver.OCIHandleFree(FErrorHandle, OCI_HTYPE_ERROR);
-    FErrorHandle := nil;
-    FPlainDriver.OCIHandleFree(FServerHandle, OCI_HTYPE_SERVER);
-    FServerHandle := nil;
-    FPlainDriver.OCIHandleFree(FOCIEnv, OCI_HTYPE_ENV);
-    FOCIEnv := nil;
-  end;
+  S: String;
+  mode: ub4;
   procedure GetRawCharacterSet;
   {$IFNDEF UNICODE}
   var P: PWidechar;
@@ -506,7 +635,7 @@ begin
     Succeeded := True;
   finally
     if not Succeeded then
-      CleanupOnFail;
+      FreeAllocatedHandles;
   end;
 
   if fcharset = 0 then begin
@@ -516,7 +645,7 @@ begin
     FPlainDriver.OCIAttrGet(FOCIEnv, OCI_HTYPE_ENV, @ncharset,
       nil, OCI_NLS_NCHARSET_ID, FErrorHandle);
     if ncharset <> OCI_UTF16ID then begin
-      CleanupOnFail;
+      FreeAllocatedHandles;
       Open;//recursive call we can not patch the env varibles using OCIAttrSet
       Exit;
     end;
@@ -559,14 +688,16 @@ begin
   FPlainDriver.OCIAttrSet(FSessionHandle,OCI_HTYPE_SESSION,@fBlobPrefetchSize,0,
     OCI_ATTR_DEFAULT_LOBPREFETCH_SIZE,FErrorHandle);
   Succeeded := False;
+  S := Info.Values[ConnProps_OCIAuthenticateMode];
+  Mode := {$IFDEF UNICODE}UnicodeToUInt32Def{$ELSE}RawToUInt32Def{$ENDIF}(S, OCI_DEFAULT);
   Status := FPlainDriver.OCISessionBegin(FContextHandle, FErrorHandle,
-    FSessionHandle, OCI_CRED_RDBMS, OCI_DEFAULT);
+    FSessionHandle, OCI_CRED_RDBMS, Mode);
   if Status <> OCI_SUCCESS then try
     HandleErrorOrWarning(FErrorHandle, Status, lcConnect, FLogMessage, Self);
     Succeeded := True;
   finally
     if not Succeeded then
-      CleanupOnFail;
+      FreeAllocatedHandles;
   end;
   FPlainDriver.OCIAttrSet(FContextHandle, OCI_HTYPE_SVCCTX, FSessionHandle, 0,
     OCI_ATTR_SESSION, FErrorHandle);
@@ -633,18 +764,39 @@ begin
   FBlobPrefetchSize := StrToIntDef(Info.Values[ConnProps_BlobPrefetchSize], 8*1024);
 end;
 
+procedure TZOracleConnection.FreeAllocatedHandles;
+begin
+  if FSessionHandle <> nil then begin
+    FPlainDriver.OCIHandleFree(FSessionHandle, OCI_HTYPE_SESSION);
+    FSessionHandle := nil;
+  end;
+  if FDescibeHandle <> nil then begin
+    FPlainDriver.OCIHandleFree(FDescibeHandle, OCI_HTYPE_DESCRIBE);
+    FDescibeHandle := nil;
+  end;
+  if FContextHandle <> nil then begin
+    FPlainDriver.OCIHandleFree(FContextHandle, OCI_HTYPE_SVCCTX);
+    FContextHandle := nil;
+  end;
+  if FErrorHandle <> nil then begin
+    FPlainDriver.OCIHandleFree(FErrorHandle, OCI_HTYPE_ERROR);
+    FErrorHandle := nil;
+  end;
+  if FServerHandle <> nil then begin
+    FPlainDriver.OCIHandleFree(FServerHandle, OCI_HTYPE_SERVER);
+    FServerHandle := nil;
+  end;
+  if FOCIEnv <> nil then begin
+    FPlainDriver.OCIHandleFree(FOCIEnv, OCI_HTYPE_ENV);
+    FOCIEnv := nil;
+  end;
+end;
+
 procedure TZOracleConnection.ClearWarnings;
 begin
    FreeAndNil(fWarning);
 end;
 
-{**
-  Makes all changes made since the previous
-  commit/rollback permanent and releases any database locks
-  currently held by the Connection. This method should be
-  used only when auto-commit mode has been disabled.
-  @see #setAutoCommit
-}
 procedure TZOracleConnection.Commit;
 begin
   if Closed then
@@ -656,6 +808,31 @@ begin
     fAttachedTransaction.StartTransaction;
     AutoCommit := not FRestartTransaction;
   end;
+end;
+
+procedure TZOracleConnection.ReleaseImmediat(
+  const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
+var Imm: IImmediatelyReleasable;
+  B: Boolean;
+  I: Integer;
+begin
+  if (fAttachedTransaction <> nil) and (fAttachedTransaction.QueryInterface(IImmediatelyReleasable, imm) = S_OK) and (imm <> Sender) then begin
+    imm.ReleaseImmediat(Sender, AError);
+    fAttachedTransaction := nil;
+  end;
+  if (fLocalTransaction <> nil) and (fLocalTransaction.QueryInterface(IImmediatelyReleasable, imm) = S_OK) and (imm <> Sender) then begin
+    imm.ReleaseImmediat(Sender, AError);
+    fLocalTransaction := nil;
+  end;
+  for b := false to true do
+    if fGlobalTransactions[b] <> nil then begin
+      for i := fGlobalTransactions[b].Count -1 downto 0 do
+        if (fGlobalTransactions[b] <> nil) and (fGlobalTransactions[b].QueryInterface(IImmediatelyReleasable, imm) = S_OK) and (imm <> Sender) then
+          imm.ReleaseImmediat(Sender, AError);
+      fGlobalTransactions[b].Clear;
+    end;
+  inherited ReleaseImmediat(Sender, AError);
+  FreeAllocatedHandles;
 end;
 
 procedure TZOracleConnection.ReleaseTransaction(
@@ -679,13 +856,6 @@ begin
   end;
 end;
 
-{**
-  Drops all changes made since the previous
-  commit/rollback and releases any database locks currently held
-  by this Connection. This method should be used only when auto-
-  commit has been disabled.
-  @see #setAutoCommit
-}
 procedure TZOracleConnection.Rollback;
 begin
   if Closed then
@@ -739,13 +909,13 @@ end;
     pre-compiled SQL statement
 }
 function TZOracleConnection.PrepareCallWithParams(const Name: String;
-  Info: TStrings): IZCallableStatement;
+  Params: TStrings): IZCallableStatement;
 begin
   if IsClosed then
      Open;
   if ConSettings.ClientCodePage.ID = OCI_UTF16ID
-  then Result := TZOracleCallableStatement_W.Create(Self, Name, Info)
-  else Result := TZOracleCallableStatement_A.Create(Self, Name, Info);
+  then Result := TZOracleCallableStatement_W.Create(Self, Name, Params)
+  else Result := TZOracleCallableStatement_A.Create(Self, Name, Params);
 end;
 
 {**
@@ -825,31 +995,7 @@ begin
           HandleErrorOrWarning(FErrorHandle, Status, lcDisconnect, LogMessage, Self);
       end;
     finally
-      { Frees all handles }
-      if FDescibeHandle <> nil then begin
-        FPlainDriver.OCIHandleFree(FDescibeHandle, OCI_HTYPE_DESCRIBE);
-        FDescibeHandle := nil;
-      end;
-      if FSessionHandle <> nil then begin
-        FPlainDriver.OCIHandleFree(FSessionHandle, OCI_HTYPE_SESSION);
-        FSessionHandle := nil;
-      end;
-      if FContextHandle <> nil then begin
-        FPlainDriver.OCIHandleFree(FContextHandle, OCI_HTYPE_SVCCTX);
-        FContextHandle := nil;
-      end;
-      if FServerHandle <> nil then begin
-        FPlainDriver.OCIHandleFree(FServerHandle, OCI_HTYPE_SERVER);
-        FServerHandle := nil;
-      end;
-      if FErrorHandle <> nil then begin
-        FPlainDriver.OCIHandleFree(FErrorHandle, OCI_HTYPE_ERROR);
-        FErrorHandle := nil;
-      end;
-      if FOCIEnv <> nil then begin
-        FPlainDriver.OCIHandleFree(FOCIEnv, OCI_HTYPE_ENV);
-        FOCIEnv := nil;
-      end;
+      FreeAllocatedHandles;
       if DriverManager.HasLoggingListener then
         DriverManager.LogMessage(lcConnect, URL.Protocol, LogMessage);
     end;
@@ -929,16 +1075,6 @@ begin
   end;
 end;
 
-{**
-  Puts this connection in read-only mode as a hint to enable
-  database optimizations.
-
-  <P><B>Note:</B> This method cannot be called while in the
-  middle of a transaction.
-
-  @param readOnly true enables read-only mode; false disables
-    read-only mode.
-}
 procedure TZOracleConnection.SetReadOnly(Value: Boolean);
 begin
    if (Value and (TransactIsolationLevel = tiSerializable)) then
@@ -946,10 +1082,6 @@ begin
   ReadOnly := Value;
 end;
 
-{**
-  Sets a new transact isolation level.
-  @param Level a new transact isolation level.
-}
 procedure TZOracleConnection.SetTransactionIsolation(
   Level: TZTransactIsolationLevel);
 begin
@@ -1034,6 +1166,9 @@ procedure TZOracleConnection.ExecuteImmediat(const SQL: UnicodeString;
 var Stmt: POCIStmt;
   Status: sword;
 begin
+  if IsClosed then
+    Open;
+
   if ConSettings.ClientCodePage.ID <> OCI_UTF16ID
   then inherited ExecuteImmediat(SQL, LoggingCategory)
   else begin
@@ -1193,7 +1328,8 @@ JmpConcat:
             then WriterW.AddLineFeedIfNotEmpty({$IFDEF UNICODE}ErrorMessage{$ELSE}ErrorMessageW{$ENDIF})
             else begin
               FirstErrorCode := ErrorCode;
-              if (FirstErrorCode = 3314) and (LogCategory <> lcConnect) then //disconnect
+              if (FirstErrorCode = ORA_03113_end_of_file_on_communication_channel) or
+                 (FirstErrorCode = ORA_03114_not_connected_to_ORACLE) and (LogCategory <> lcConnect) then //disconnect
                 AExceptionClass := EZSQLConnectionLost;
             end;
             L := {$IFDEF WITH_PWIDECHAR_STRLEN}SysUtils.StrLen{$ELSE}Length{$ENDIF}(PWideChar(@fByteBuffer[0]));
@@ -1223,7 +1359,8 @@ JmpConcat:
             then WriterA.AddLineFeedIfNotEmpty({$IFNDEF UNICODE}ErrorMessage{$ELSE}ErrorMessageA{$ENDIF})
             else begin
               FirstErrorCode := ErrorCode;
-              if (FirstErrorCode = 3314) and (LogCategory <> lcConnect) then //disconnect
+              if (FirstErrorCode = ORA_03113_end_of_file_on_communication_channel) or
+                 ((FirstErrorCode = ORA_03114_not_connected_to_ORACLE) and (LogCategory <> lcConnect)) then //disconnect
                 AExceptionClass := EZSQLConnectionLost;
             end;
             L := StrLen(PAnsiChar(@fByteBuffer[0]));
@@ -1354,26 +1491,27 @@ end;
 { TZOracleTransaction }
 
 procedure TZOracleTransaction.BeforeDestruction;
-var Status: sword;
 begin
   inherited BeforeDestruction;
-  if FOCITrans <> nil then begin
-    try
-      fSavepoints.Clear;
-      if FStarted then
-        RollBack;
-      Status := FOwner.FPlainDriver.OCIHandleFree(FOCITrans, OCI_HTYPE_TRANS);
-      if Status <> OCI_SUCCESS then
-        FOwner.HandleErrorOrWarning(FOwner.FErrorHandle, Status, lcTransaction, 'OCIHandleFree', Self);
-    finally
-      FOCITrans := nil;
-    end;
-  end;
+  Close;
   fSavepoints.Free;
 end;
 
 procedure TZOracleTransaction.Close;
+var Status: sword;
 begin
+  if FOCITrans <> nil then try
+    fSavepoints.Clear;
+    if FStarted then
+      RollBack;
+  finally
+    if FOCITrans <> nil then begin
+      Status := FOwner.FPlainDriver.OCIHandleFree(FOCITrans, OCI_HTYPE_TRANS);
+      FOCITrans := nil;
+      if (Status <> OCI_SUCCESS) and (FRefCount > 0) then
+        FOwner.HandleErrorOrWarning(FOwner.FErrorHandle, Status, lcTransaction, 'OCIHandleFree', Self);
+    end;
+  end;
 end;
 
 procedure TZOracleTransaction.Commit;
@@ -1460,11 +1598,18 @@ end;
 procedure TZOracleTransaction.ReleaseImmediat(
   const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
 var imm: IImmediatelyReleasable;
+    Status: sword;
 begin
   fSavepoints.Clear;
-  FOCITrans := nil;
   FStarted := False;
-  fBranches.Clear;
+  if fBranches <> nil then
+    fBranches.Clear;
+  if FOCITrans <> nil then begin
+    Status := FOwner.FPlainDriver.OCIHandleFree(FOCITrans, OCI_HTYPE_TRANS);
+    FOCITrans := nil;
+    if Status <> OCI_SUCCESS then
+      FOwner.HandleErrorOrWarning(FOwner.FErrorHandle, Status, lcTransaction, 'OCIHandleFree', Self);
+  end;
   if (FOwner <> nil) then begin
     FOwner.QueryInterface(IImmediatelyReleasable, imm);
     if (imm <> Sender) then
@@ -1483,7 +1628,7 @@ begin
   else try
     Status := FOwner.FPlainDriver.OCITransRollback(FOwner.FContextHandle,
       FOwner.FErrorHandle, OCI_DEFAULT);
-    if Status <> OCI_SUCCESS then
+    if (Status <> OCI_SUCCESS) and (FRefCount > 0) then
       FOwner.HandleErrorOrWarning(FOwner.FErrorHandle, Status, lcTransaction, 'TRANSACTION ROLLBACK', Self);
   finally
     FStarted := False;

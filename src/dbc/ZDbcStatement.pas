@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -162,6 +162,17 @@ type
     procedure Close;
     procedure AfterClose; virtual;
     function IsClosed: Boolean;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); virtual;
 
     function GetMaxFieldSize: Integer; virtual;
@@ -328,10 +339,10 @@ type
   TZAbstractPreparedStatement = class(TZAbstractStatement, IImmediatelyReleasable)
   private
     FBatchDMLArrayCount: ArrayLenInt;
-    FPrepared : Boolean;
     FSupportsDMLBatchArrays: Boolean;
     FBindList: TZBindList;
   protected
+    FPrepared: Boolean;
     FOpenLobStreams: TZSortedList;
     FUniTemp: UnicodeString;
     FRawTemp: RawByteString;
@@ -437,6 +448,17 @@ type
     procedure Unprepare; virtual;
     function IsPrepared: Boolean; virtual;
     property Prepared: Boolean read IsPrepared;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable;
       var AError: EZSQLConnectionLost); override;
 
@@ -617,7 +639,17 @@ type
 
     constructor Create(const Connection: IZConnection; const StoredProcOrFuncIdentifier: string;
       {$IFDEF AUTOREFCOUNT}const{$ENDIF}Info: TStrings);
-
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable;
       var AError: EZSQLConnectionLost); override;
   end;
@@ -2881,7 +2913,7 @@ function TZAbstractPreparedStatement.GetUnicodeString(
 begin
   {$IFNDEF GENERIC_INDEX}Dec(ParameterIndex);{$ENDIF}
   Result := fOutParamResultSet.GetUnicodeString(ParamterIndex2ResultSetIndex(ParameterIndex));
-  if (BindList.ParamTypes[ParameterIndex] = pctInOut) then
+  if (BindList.ParamTypes[ParameterIndex] = pctInOut) and not FSupportsBidirectionalParamIO then
     IZPreparedStatement(FWeakIZPreparedStatementPtr).SetUnicodeString(ParameterIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, Result)
 end;
 
@@ -2891,7 +2923,7 @@ function TZAbstractPreparedStatement.GetUTF8String(
 begin
   {$IFNDEF GENERIC_INDEX}Dec(ParameterIndex);{$ENDIF}
   Result := fOutParamResultSet.GetUTF8String(ParamterIndex2ResultSetIndex(ParameterIndex));
-  if (BindList.ParamTypes[ParameterIndex] = pctInOut) then
+  if (BindList.ParamTypes[ParameterIndex] = pctInOut) and not FSupportsBidirectionalParamIO then
     IZPreparedStatement(FWeakIZPreparedStatementPtr).SetUTF8String(ParameterIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, Result)
 end;
 {$ENDIF NO_UTF8STRING}
@@ -2977,7 +3009,7 @@ function TZAbstractPreparedStatement.IsNull(ParameterIndex: Integer): Boolean;
 begin
   {$IFNDEF GENERIC_INDEX}Dec(ParameterIndex);{$ENDIF}
   Result := fOutParamResultSet.IsNull(ParamterIndex2ResultSetIndex(ParameterIndex));
-  if Result and (BindList.ParamTypes[ParameterIndex] = pctInOut) then
+  if Result and (BindList.ParamTypes[ParameterIndex] = pctInOut) and not FSupportsBidirectionalParamIO then
     IZPreparedStatement(FWeakIZPreparedStatementPtr).SetNull(ParameterIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, BindList.SQLTypes[ParameterIndex]);
 end;
 
@@ -3107,6 +3139,7 @@ begin
     end;
     FOutParamResultSet := nil;
   end;
+  SetParamCount(0);
   inherited ReleaseImmediat(Sender, AError);
 end;
 
@@ -4061,9 +4094,9 @@ begin
           ZSysUtils.ScaledOrdinal2Bcd(Value, 0, fBCDTemp);
           BindList.Put(Index, fBCDTemp);
         end;
-      else FBindList.Put(Index, SQLType, P4Bytes(@Value));
+      else FBindList.Put(Index, SQLType, {$IFDEF CPU64}P8Bytes{$ELSE}P4Bytes{$ENDIF}(@Value));
     end;
-  end else FBindList.Put(Index, SQLType, P4Bytes(@Value));
+  end else FBindList.Put(Index, SQLType, {$IFDEF CPU64}P8Bytes{$ELSE}P4Bytes{$ENDIF}(@Value));
 end;
 
 procedure TZAbstractCallableStatement.BindUnsignedOrdinal(Index: Integer;
@@ -4092,9 +4125,9 @@ begin
           ZSysUtils.ScaledOrdinal2Bcd(Value, 0, fBCDTemp, False);
           BindList.Put(Index, fBCDTemp);
         end;
-      else FBindList.Put(Index, SQLType, P4Bytes(@Value));
+      else FBindList.Put(Index, SQLType, {$IFDEF CPU64}P8Bytes{$ELSE}P4Bytes{$ENDIF}(@Value));
     end;
-  end else FBindList.Put(Index, SQLType, P4Bytes(@Value));
+  end else FBindList.Put(Index, SQLType, {$IFDEF CPU64}P8Bytes{$ELSE}P4Bytes{$ENDIF}(@Value));
 end;
 
 {**
@@ -5152,11 +5185,6 @@ end;
   @exception SQLException if a database access error occurs
 }
 {$IFNDEF NO_ANSISTRING}
-{$IFDEF FPC}
-  {$PUSH}
-  {$WARN 5093 off : Function result variable of a managed type does not seem to be initialized} //cpu 32
-  {$WARN 5094 off : Function result variable of a managed type does not seem to be initialized} //cpu 64
-{$ENDIF} // ZSetString does the job even if NOT required
 function TZAbstractCallableStatement_A.GetAnsiString(
   ParameterIndex: Integer): AnsiString;
 var
@@ -5165,14 +5193,14 @@ var
 begin
   {$IFNDEF GENERIC_INDEX}ParameterIndex := ParameterIndex-1;{$ENDIF}
   FExecStatement.GetPChar(ParameterIndex, Pointer(P), L, FClientCP);
-  if (FClientCP = ZOSCodePage) then
-    ZSetString(P, L, Result)
-  else begin
+  if (FClientCP = ZOSCodePage) then begin
+    {$IFDEF FPC}Result := '';{$ENDIF}
+    ZSetString(P, L, Result);
+  end else begin
     FUniTemp := PRawToUnicode(P, L, FClientCP);
     Result := ZUnicodeToRaw(FUniTemp, ZOSCodePage);
   end;
 end;
-{$IFDEF FPC} {$POP} {$ENDIF}
 {$ENDIF NO_ANSISTRING}
 
 {**
@@ -5191,11 +5219,6 @@ end;
   is <code>null</code>.
   @exception SQLException if a database access error occurs
 }
-{$IFDEF FPC}
-  {$PUSH}
-  {$WARN 5093 off : Function result variable of a managed type does not seem to be initialized} //cpu 32
-  {$WARN 5094 off : Function result variable of a managed type does not seem to be initialized} //cpu 64
-{$ENDIF} // ZSetString does the job even if NOT required
 function TZAbstractCallableStatement_A.GetRawByteString(
   ParameterIndex: Integer): RawByteString;
 var
@@ -5204,9 +5227,9 @@ var
 begin
   {$IFNDEF GENERIC_INDEX}ParameterIndex := ParameterIndex-1;{$ENDIF}
   FExecStatement.GetPChar(ParameterIndex, Pointer(P), L, FClientCP);
+  {$IFDEF FPC}Result := '';{$ENDIF}
   ZSetString(P, L, Result)
 end;
-{$IFDEF FPC} {$POP} {$ENDIF}
 
 {**
   Retrieves the value of a JDBC <code>CHAR</code>, <code>VARCHAR</code>,
@@ -5276,11 +5299,6 @@ end;
   @exception SQLException if a database access error occurs
 }
 {$IFNDEF NO_UTF8STRING}
-{$IFDEF FPC}
-  {$PUSH}
-  {$WARN 5093 off : Function result variable of a managed type does not seem to be initialized} //cpu 32
-  {$WARN 5094 off : Function result variable of a managed type does not seem to be initialized} //cpu 64
-{$ENDIF} // ZSetString does the job even if NOT required
 function TZAbstractCallableStatement_A.GetUTF8String(
   ParameterIndex: Integer): UTF8String;
 var
@@ -5289,15 +5307,14 @@ var
 begin
   {$IFNDEF GENERIC_INDEX}ParameterIndex := ParameterIndex-1;{$ENDIF}
   FExecStatement.GetPChar(ParameterIndex, Pointer(P), L, FClientCP);
-  if (FClientCP = zCP_UTF8) then
-    ZSetString(P, L, Result)
-  else begin
+  if (FClientCP = zCP_UTF8) then begin
+    {$IFDEF FPC}Result := '';{$ENDIF}
+    ZSetString(P, L, Result);
+  end else begin
     FUniTemp := PRawToUnicode(P, L, FClientCP);
     Result := ZUnicodeToRaw(FUniTemp, ZOSCodePage);
   end;
 end;
-{$IFDEF FPC} {$POP} {$ENDIF} // ZSetString does the job even if NOT required
-
 {$ENDIF}
 
 {**

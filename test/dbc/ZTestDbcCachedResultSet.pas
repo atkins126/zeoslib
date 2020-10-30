@@ -120,6 +120,7 @@ type
     procedure RefreshCurrentRow(const Sender: IZCachedResultSet;RowAccessor: TZRowAccessor);
 
     procedure SetTransaction(const Value: IZTransaction);
+    function HasAutoCommitTransaction: Boolean;
   end;
 
 implementation
@@ -563,7 +564,7 @@ begin
         CheckEquals(FLong, GetLong(stLongIndex), 'GetLong');
         CheckEquals(FFloat, GetFloat(stFloatIndex), 0, 'GetFloat');
         CheckEquals(FDouble, GetDouble(stDoubleIndex), 0, 'GetDouble');
-        GetBigDecimal(stBigDecimalIndex, BCD);
+        GetBigDecimal(stBigDecimalIndex, BCD{%H-});
         CheckEquals(BcdToStr(FBigDecimal), BcdToStr(BCD), 'GetBigDecimal');
         CheckEquals(FString, GetString(stStringIndex), 'GetString');
         CheckEquals(FDate, GetDate(stDateIndex), 0, 'GetDate');
@@ -653,7 +654,8 @@ begin
     FResultSet := CachedResultSet;
     FResultSet.SetResolver(TZEmptyResolver.Create);
     FillResultSet(FResultSet, ROWS_COUNT);
-
+    FResultSet.PostUpdatesCached;
+    CheckFalse(FResultSet.IsPendingUpdates);
     with FResultSet do
     begin
       { Update record values to null}
@@ -710,7 +712,7 @@ begin
         CheckEquals(FLong, GetLong(stLongIndex), 'Field changed; GetLong');
         CheckEquals(FFloat, GetFloat(stFloatIndex), 0, 'Field changed; GetFloat');
         CheckEquals(FDouble, GetDouble(stDoubleIndex), 0, 'Field changed; GetDouble');
-        GetBigDecimal(stBigDecimalIndex, BCD);
+        GetBigDecimal(stBigDecimalIndex, BCD{%H-});
         CheckEquals(BcdToStr(FBigDecimal), BcdToStr(BCD), 'Field changed; GetBigDecimal');
         CheckEquals(FString, GetString(stStringIndex), 'Field changed; GetString');
         CheckEquals(FByteArray, GetBytes(stBytesIndex), 'Field changed; GetBytes');
@@ -992,6 +994,7 @@ end;
 
 { TZEmptyResolver }
 
+{$IFDEF FPC} {$PUSH} {$WARN 5024 off : Parameter "...." not used} {$ENDIF}
 {**
   Calculate default values for the fields.
   @param Sender a cached result set object.
@@ -1009,6 +1012,11 @@ end;
   @param OldRowAccessor a row accessor which contains old column values.
   @param NewRowAccessor a row accessor which contains new column values.
 }
+function TZEmptyResolver.HasAutoCommitTransaction: Boolean;
+begin
+  Result := True;
+end;
+
 procedure TZEmptyResolver.PostUpdates(const Sender: IZCachedResultSet;
   UpdateType: TZRowUpdateType; const OldRowAccessor,
   NewRowAccessor: TZRowAccessor);
@@ -1032,6 +1040,8 @@ procedure TZEmptyResolver.SetTransaction(const Value: IZTransaction);
 begin
 
 end;
+
+{$IFDEF FPC} {$POP} {$ENDIF}
 
 initialization
   RegisterTest('dbc',TZTestCachedResultSetCase.Suite);

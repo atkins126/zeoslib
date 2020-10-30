@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -1630,7 +1630,7 @@ begin
     while Next do begin
       sName := IC.Quote(GetString(OBJECT_NAME_Index));
       if GetString(PROCEDURE_NAME_Index) <> '' then
-        sName :=  sName+'.'+IC.Quote(GetString(PROCEDURE_NAME_Index));
+        sName :=  sName+'.'+IC.Quote(GetString(PROCEDURE_NAME_Index), iqStoredProcedure);
       Result.MoveToInsertRow;
       //Result.UpdateNull(CatalogNameIndex);
       Result.UpdatePAnsiChar(SchemaNameIndex, GetPAnsiChar(PROCEDURE_SCHEM_Index, Len), Len);

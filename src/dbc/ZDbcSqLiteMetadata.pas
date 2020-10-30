@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -1343,7 +1343,7 @@ var
       aiIdx := ZFastCode.Pos('AUTOINCREMENT', CreateSQLUp);
       if (aiIdx > 0) then begin
         if IC.IsCaseSensitive(ColumnName) then
-          ColumnName := IC.Quote(ColumnName);
+          ColumnName := IC.Quote(ColumnName, iqColumn);
         colIdx := ZFastCode.Pos(ColumnName, CreateSQL);
         if (colIdx > 0) and (colIdx < aiIdx) then begin
           colIdx := PosEx('INTEGER', CreateSQLUp, colIdx);

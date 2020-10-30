@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -375,6 +375,17 @@ type
     FPlainDriver: TZOraclePlainDriver;
     FConnection: IZOracleConnection;
   public //IImmediatelyReleasable
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); virtual;
     function GetConSettings: PZConSettings;
     procedure HandleAttributError(Status: SWord; WasGet: Boolean);
@@ -431,6 +442,17 @@ type
     function InternalDescribe(const Name: RawByteString; _Type: UB4;
       Owner: POCIHandle): Sword;
   public
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); override;
     procedure Describe(_Type: UB4; const Name: RawByteString);
     procedure ConcatParentName(NotArgName: Boolean; {$IFDEF AUTOREFCOUNT}const{$ENDIF}
@@ -454,6 +476,17 @@ type
     function InternalDescribe(const Name: UnicodeString; _Type: UB4;
       Owner: POCIHandle): Sword;
   public
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost); override;
 
     procedure Describe(_Type: UB4; const Name: UnicodeString);
@@ -1069,6 +1102,7 @@ begin
     Inc(pNuDigits);
     Inc(pNibble);
   end;
+  PCardinal(pNibble+Byte(HalfNibbles))^ := 0; //some compilers read over lastnibble (FPC+XE10.3x64 f.e.)
   if Positive
   then Bcd.SignSpecialPlaces := Byte(Scale)
   else Bcd.SignSpecialPlaces := Byte(Scale) or $80;
@@ -1743,13 +1777,17 @@ var P: PAnsiChar;
   parmh: POCIHandle;
   Descriptor: POCIDescribe;
   tmp: RawByteString;
+  {$IFDEF WITH_RAWBYTESTRING}
   ConSettings: PZConSettings;
+  {$ENDIF WITH_RAWBYTESTRING}
   OCISvcCtx: POCISvcCtx;
 begin
   //https://www.bnl.gov/phobos/Detectors/Computing/Orant/doc/appdev.804/a58234/describe.htm#440341
   //section describing the stored procedure
   Descriptor := nil;
+  {$IFDEF WITH_RAWBYTESTRING}
   ConSettings := FConnection.GetConSettings;
+  {$ENDIF WITH_RAWBYTESTRING}
   OCISvcCtx   := FConnection.GetServiceContextHandle;
   { get a descriptor handle for the param/obj }
   Result := FPlainDriver.OCIHandleAlloc(Owner, Descriptor, OCI_HTYPE_DESCRIBE, 0, nil);
@@ -1903,7 +1941,7 @@ procedure TZOraProcDescriptor_A.Describe(_Type: UB4; const Name: RawByteString);
 var
   ProcSQL, tmp: RawByteString;
   Status, ps, ps2: sword;
-  IC: IZIdentifierConvertor;
+  IC: IZIdentifierConverter;
   {$IFDEF UNICODE}
   S: String;
   {$ENDIF}
@@ -1912,7 +1950,7 @@ begin
   OCIEnv := FConnection.GetConnectionHandle;
   ProcSQL := Name;
 
-  IC := FConnection.GetMetadata.GetIdentifierConvertor;
+  IC := FConnection.GetMetadata.GetIdentifierConverter;
   { describe the object: }
   Status := InternalDescribe(ProcSQL, _Type, OCIEnv);
   if (Status <> OCI_SUCCESS) then begin
@@ -1975,7 +2013,7 @@ end;
 
 procedure TZOraProcDescriptor_W.ConcatParentName(NotArgName: Boolean;
   {$IFDEF AUTOREFCOUNT} const {$ENDIF}SQLWriter: TZUnicodeSQLStringWriter;
-  var Result: UnicodeString; const IC: IZIdentifierConvertor);
+  var Result: UnicodeString; const IC: IZIdentifierConverter);
 {$IFNDEF UNICODE}
 var S: UnicodeString;
     R: RawByteString;
@@ -2017,7 +2055,7 @@ procedure TZOraProcDescriptor_W.Describe(_Type: UB4;
 var
   ProcSQL, tmp: UnicodeString;
   Status, ps, ps2: sword;
-  IC: IZIdentifierConvertor;
+  IC: IZIdentifierConverter;
   {$IFNDEF UNICODE}
   S: String;
   {$ENDIF}
@@ -2026,7 +2064,7 @@ begin
   OCIEnv := FConnection.GetConnectionHandle;
   ProcSQL := Name;
 
-  IC := FConnection.GetMetadata.GetIdentifierConvertor;
+  IC := FConnection.GetMetadata.GetIdentifierConverter;
   { describe the object: }
   Status := InternalDescribe(ProcSQL, _Type, OCIEnv);
   if (Status <> OCI_SUCCESS) then begin

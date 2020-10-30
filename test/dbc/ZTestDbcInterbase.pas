@@ -90,13 +90,18 @@ type
     procedure FB_TestUpdateCounts_FromSuspendedProcedure_B;
     procedure FB_TestUpdateCounts_FromSuspendedProcedure_C;
     procedure TestLongStatements;
+    procedure Test_GENERATED_ALWAYS_64;
+    procedure Test_GENERATED_BY_DEFAULT_64;
+    procedure Test_DECFIXED;
+    procedure Test_TIMEZONE;
   end;
 
 {$ENDIF DISABLE_INTERBASE_AND_FIREBIRD}
 implementation
 {$IFNDEF DISABLE_INTERBASE_AND_FIREBIRD}
 
-uses SysUtils, ZTestConsts, ZTestCase, ZVariant, ZMessages,
+uses SysUtils, Types,
+  ZTestConsts, ZTestCase, ZVariant, ZMessages, ZSysUtils,
   ZDbcInterbaseFirebirdMetadata, ZDbcFirebirdInterbase;
 
 { TZTestDbcInterbaseCase }
@@ -490,6 +495,219 @@ begin
   ImageStream.Free;
 
   Statement.Close;
+end;
+
+procedure TZTestDbcInterbaseCase.Test_DECFIXED;
+var
+  Statement: IZStatement;
+  ResultSet: IZResultSet;
+  TableType: TStringDynArray;
+begin
+  Statement := Connection.CreateStatement;
+  try
+    CheckNotNull(Statement);
+    if (Connection as IZInterbaseFirebirdConnection).IsInterbaseLib or (Connection.GetHostVersion < EncodeSQLVersioning(4, 0, 0)) then
+      Exit;
+    ResultSet := nil;
+    SetLength(TableType, 1);
+    TableType[0] := 'TABLE';
+    try
+      ResultSet := Connection.GetMetadata.GetTables('','','DECFIXED_VALUES',TableType);
+      if ResultSet.Next then
+        Statement.ExecuteUpdate('drop table DECFIXED_VALUES');
+      Statement.ExecuteUpdate('CREATE TABLE DECFIXED_VALUES( '+
+        'id bigint GENERATED ALWAYS AS IDENTITY NOT NULL, '+
+        'DECIMAL_34_0 decimal(34,0) NOT NULL, '+
+        'CONSTRAINT pk_DECFIXED_VALUES_id PRIMARY KEY(id)) ');
+      Statement.ExecuteUpdate('insert into DECFIXED_VALUES(DECIMAL_34_0) '+
+        'VALUES(1234567890123456789012345678901234)');
+      Statement.SetResultSetType(rtScrollInsensitive);
+      Statement.SetResultSetConcurrency(rcUpdatable);
+
+      ResultSet := Statement.ExecuteQuery('SELECT * FROM DECFIXED_VALUES');
+      try
+        CheckNotNull(ResultSet);
+        ResultSet.Next;
+        CheckEquals('1234567890123456789012345678901234', ResultSet.GetString(FirstDbcIndex+1), 'the string value of field DECIMAL_34_0');
+        (*ResultSet.MoveToInsertRow;
+        Resultset.UpdateULong(FirstDbcIndex+1, High(Uint64));
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');
+        ResultSet.MoveToInsertRow;
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_ALWAYS_64_2');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');*)
+      finally
+        ResultSet.Close;
+        ResultSet := nil;
+      end;
+    finally
+      Statement.ExecuteUpdate('drop table DECFIXED_VALUES');
+      Statement.Close;
+    end;
+  finally
+    Connection.Close;
+  end;
+end;
+
+procedure TZTestDbcInterbaseCase.Test_GENERATED_ALWAYS_64;
+var
+  Statement: IZStatement;
+  ResultSet: IZResultSet;
+  TableType: TStringDynArray;
+begin
+  Statement := Connection.CreateStatement;
+  try
+    CheckNotNull(Statement);
+    if (Connection as IZInterbaseFirebirdConnection).IsInterbaseLib or (Connection.GetHostVersion < EncodeSQLVersioning(4, 0, 0)) then
+      Exit;
+    ResultSet := nil;
+    SetLength(TableType, 1);
+    TableType[0] := 'TABLE';
+    try
+      ResultSet := Connection.GetMetadata.GetTables('','','GENERATED_ALWAYS_64',TableType);
+      if ResultSet.Next then
+        Statement.ExecuteUpdate('drop table GENERATED_ALWAYS_64');
+      Statement.ExecuteUpdate('CREATE TABLE GENERATED_ALWAYS_64 ( '+
+        'id BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL, '+
+        '"value" VARCHAR(100), '+
+        'CONSTRAINT pk_GENERATED_ALWAYS_BIG_64_id PRIMARY KEY(id)) ');
+      Statement.SetResultSetType(rtScrollInsensitive);
+      Statement.SetResultSetConcurrency(rcUpdatable);
+
+      ResultSet := Statement.ExecuteQuery('SELECT * FROM GENERATED_ALWAYS_64');
+      try
+        CheckNotNull(ResultSet);
+        PrintResultSet(ResultSet, True);
+        ResultSet.MoveToInsertRow;
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_ALWAYS_64_1');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');
+        ResultSet.MoveToInsertRow;
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_ALWAYS_64_2');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');
+      finally
+        ResultSet.Close;
+        ResultSet := nil;
+      end;
+    finally
+      Statement.ExecuteUpdate('drop table GENERATED_ALWAYS_64');
+      Statement.Close;
+    end;
+  finally
+    Connection.Close;
+  end;
+end;
+
+procedure TZTestDbcInterbaseCase.Test_GENERATED_BY_DEFAULT_64;
+var
+  Statement: IZStatement;
+  ResultSet: IZResultSet;
+  TableType: TStringDynArray;
+begin
+  Statement := Connection.CreateStatement;
+  try
+    CheckNotNull(Statement);
+    if (Connection as IZInterbaseFirebirdConnection).IsInterbaseLib or (Connection.GetHostVersion < EncodeSQLVersioning(3, 0, 6)) then
+      Exit;
+    ResultSet := nil;
+    SetLength(TableType, 1);
+    TableType[0] := 'TABLE';
+    try
+      ResultSet := Connection.GetMetadata.GetTables('','','GENERATED_BY_DEFAULT_64',TableType);
+      if ResultSet.Next then
+        Statement.ExecuteUpdate('drop table GENERATED_BY_DEFAULT_64');
+      Statement.ExecuteUpdate('CREATE TABLE GENERATED_BY_DEFAULT_64 ( '+
+        'id BIGINT GENERATED BY DEFAULT AS IDENTITY (START WITH 0 INCREMENT BY 2), '+
+        '"value" VARCHAR(100), '+
+        'CONSTRAINT pk_GENERATED_BY_DEFAULT_BIG_64_id PRIMARY KEY(id)) ');
+      Statement.SetResultSetType(rtScrollInsensitive);
+      Statement.SetResultSetConcurrency(rcUpdatable);
+
+      ResultSet := Statement.ExecuteQuery('SELECT * FROM GENERATED_BY_DEFAULT_64');
+      try
+        CheckNotNull(ResultSet);
+        PrintResultSet(ResultSet, True);
+        ResultSet.MoveToInsertRow;
+        ResultSet.UpdateLong(FirstDbcIndex, 1);
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_BY_DEFAULT_64');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the id should have a value');
+        CheckEquals(1, ResultSet.GetLong(FirstDbcIndex), 'the id should be 1');
+        ResultSet.MoveToInsertRow;
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_BY_DEFAULT_64_2');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated by default id should have a value');
+        CheckEquals(2, ResultSet.GetLong(FirstDbcIndex), 'the generated by default id should be 2');
+      finally
+        ResultSet.Close;
+        ResultSet := nil;
+      end;
+    finally
+      Statement.ExecuteUpdate('drop table GENERATED_BY_DEFAULT_64');
+      Statement.Close;
+    end;
+  finally
+    Connection.Close;
+  end;
+end;
+
+procedure TZTestDbcInterbaseCase.Test_TIMEZONE;
+var
+  Statement: IZStatement;
+  ResultSet: IZResultSet;
+  TableType: TStringDynArray;
+begin
+  Statement := Connection.CreateStatement;
+  try
+    CheckNotNull(Statement);
+    if (Connection as IZInterbaseFirebirdConnection).IsInterbaseLib or (Connection.GetHostVersion < EncodeSQLVersioning(4, 0, 0)) then
+      Exit;
+    ResultSet := nil;
+    SetLength(TableType, 1);
+    TableType[0] := 'TABLE';
+    try
+      ResultSet := Connection.GetMetadata.GetTables('','','TIME_ZONE_VALUES',TableType);
+      if ResultSet.Next then
+        Statement.ExecuteUpdate('drop table TIME_ZONE_VALUES');
+      Statement.ExecuteUpdate('CREATE TABLE TIME_ZONE_VALUES( '+
+        'id bigint GENERATED ALWAYS AS IDENTITY NOT NULL, '+
+        '"time" TIME WITH TIME ZONE NOT NULL, '+
+        '"timestamp" TIMESTAMP WITH TIME ZONE NOT NULL, '+
+        'CONSTRAINT pk_TIME_ZONE_VALUES_id PRIMARY KEY(id)) ');
+      Statement.SetResultSetType(rtScrollInsensitive);
+      Statement.SetResultSetConcurrency(rcUpdatable);
+
+      ResultSet := Statement.ExecuteQuery('SELECT * FROM TIME_ZONE_VALUES');
+      try
+        CheckNotNull(ResultSet);
+        ResultSet.MoveToInsertRow;
+        Resultset.UpdateTime(FirstDbcIndex+1, EncodeTime(10,10,10,10));
+        Resultset.UpdateTimestamp(FirstDbcIndex+2, EncodeDate(2020,9,1)+EncodeTime(10,10,10,10));
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');
+        {ResultSet.MoveToInsertRow;
+        ResultSet.UpdateString(FirstDbcIndex+1, 'Test_GENERATED_ALWAYS_64_2');
+        ResultSet.InsertRow;
+        CheckFalse(ResultSet.IsNull(FirstDbcIndex), 'the generated always id should have a value');
+        Check(ResultSet.GetLong(FirstDbcIndex) > 0, 'the generated always id should be greater then zero');}
+      finally
+        ResultSet.Close;
+        ResultSet := nil;
+      end;
+    finally
+      Statement.ExecuteUpdate('drop table TIME_ZONE_VALUES');
+      Statement.Close;
+    end;
+  finally
+    Connection.Close;
+  end;
 end;
 
 procedure TZTestDbcInterbaseCase.FB_TestUpdateCounts;

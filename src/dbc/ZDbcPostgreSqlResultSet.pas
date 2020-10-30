@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -174,6 +174,17 @@ type
     function GetBlobOid: Oid;
     function Clone(LobStreamMode: TZLobStreamMode): IZBlob;
   public //IImmediatelyReleasable
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
     function GetConSettings: PZConSettings;
   public
@@ -243,7 +254,22 @@ type
       {$IFDEF AUTOREFCOUNT}const {$ENDIF} Params: TStrings); override;
   end;
 
-  {** Implements a specialized cached resultset }
+  {** Implements a specialized cached resolver for PostgreSQL version 10.0 and up. }
+  TZPostgreSQLCachedResolverV10up = class(TZPostgreSQLCachedResolverV8up)
+  protected
+    FInsertReturningFields: TStrings;
+    FHasAutoIncrementColumns, FHasWritableAutoIncrementColumns: Boolean;
+    FReturningPairs: TZIndexPairList;
+  public
+    procedure AfterConstruction; override;
+    procedure BeforeDestruction; override;
+  public
+    function FormInsertStatement(NewRowAccessor: TZRowAccessor): SQLString; override;
+    procedure UpdateAutoIncrementFields(const Sender: IZCachedResultSet; UpdateType: TZRowUpdateType;
+      const OldRowAccessor, NewRowAccessor: TZRowAccessor; const Resolver: IZCachedResolver); override;
+    procedure PostUpdates(const Sender: IZCachedResultSet; UpdateType: TZRowUpdateType;
+      const OldRowAccessor, NewRowAccessor: TZRowAccessor); override;
+  end;
 
   { TZPostgresCachedResultSet }
 
@@ -2476,7 +2502,7 @@ begin
     Connection := nil;
     Analyser := nil;
     Tokenizer := nil;
-    IdentifierConvertor := nil;
+    IdentifierConverter := nil;
     PGMetaData := nil;
   end;
   Loaded := True;
@@ -2514,7 +2540,7 @@ begin
     if I > 0 then
       SQLWriter.AddText(' AND ', Result);
     S := MetaData.GetColumnName(idx);
-    Tmp := IdentifierConvertor.Quote(S);
+    Tmp := IdentifierConverter.Quote(S, iqColumn);
     SQLWriter.AddText(Tmp, Result);
     if (Metadata.IsNullable(idx) = ntNullable)
     then SQLWriter.AddText(' IS NOT DISTINCT FROM ?', Result)
@@ -2749,6 +2775,176 @@ begin
     Updated := True;
   end else Result := 0;
 end;
+
+{ TZPostgreSQLCachedResolverV10up }
+
+procedure TZPostgreSQLCachedResolverV10up.AfterConstruction;
+var
+  Fields: string;
+begin
+  inherited;
+  FReturningPairs := TZIndexPairList.Create;
+  Fields := Statement.GetParameters.Values[DSProps_InsertReturningFields];
+  if Fields <> '' then
+    FInsertReturningFields := ExtractFields(Fields, [';', ',']);
+end;
+
+procedure TZPostgreSQLCachedResolverV10up.BeforeDestruction;
+begin
+  inherited;
+  FreeAndNil(FReturningPairs);
+  FreeAndNil(FInsertReturningFields);
+end;
+
+{**
+  Forms a INSERT statements.
+  @return the composed insert SQL
+}
+function TZPostgreSQLCachedResolverV10up.FormInsertStatement(
+  NewRowAccessor: TZRowAccessor): SQLString;
+var
+  I, ColumnIndex: Integer;
+  Tmp: SQLString;
+  SQLWriter: TZSQLStringWriter;
+  {$IF DECLARED(DSProps_InsertReturningFields)}
+  Fields: TStrings;
+  {$IFEND}
+begin
+  I := MetaData.GetColumnCount;
+  SQLWriter := TZSQLStringWriter.Create(512+(I shl 5));
+  {$IF DECLARED(DSProps_InsertReturningFields)}
+  if FInsertReturningFields <> nil then begin
+    Fields := TStringList.Create;
+    Fields.Assign(FInsertReturningFields);
+  end else Fields := nil;
+  {$IFEND}
+  Result := 'INSERT INTO ';
+  try
+    Tmp := DefineTableName;
+    SQLWriter.AddText(Tmp, Result);
+    SQLWriter.AddChar(' ', Result);
+    SQLWriter.AddChar('(', Result);
+    if (FInsertStatements.Count > 0) and FHasWritableAutoIncrementColumns then
+      FInsertColumns.Clear;
+    if (FInsertColumns.Count = 0) then
+      FillInsertColumnsPairList(NewRowAccessor);
+    if (FInsertColumns.Count = 0) and not
+       {test for generated always cols }
+       ((Metadata.GetColumnCount > 0) and Metadata.IsAutoIncrement(FirstDbcIndex)) then begin
+      Result := '';
+      Exit;
+    end;
+    for I := 0 to FInsertColumns.Count-1 do begin
+      ColumnIndex := PZIndexPair(FInsertColumns[i])^.ColumnIndex;
+      Tmp := Metadata.GetColumnName(ColumnIndex);
+      Tmp := IdentifierConverter.Quote(Tmp, iqColumn);
+      SQLWriter.AddText(Tmp, Result);
+      SQLWriter.AddChar(',', Result);
+    end;
+    SQLWriter.ReplaceOrAddLastChar(',', ')', Result);
+    SQLWriter.AddText(' VALUES (', Result);
+    for I := 0 to FInsertColumns.Count - 1 do begin
+      SQLWriter.AddChar('?', Result);
+      SQLWriter.AddChar(',', Result);
+    end;
+    SQLWriter.ReplaceOrAddLastChar(',', ')', Result);
+    FReturningPairs.Clear;
+    for i := FirstDbcIndex to MetaData.GetColumnCount{$IFDEF GENERIC_INDEX}-1{$ENDIF} do
+      if Metadata.IsAutoIncrement(I) then begin
+        FHasAutoIncrementColumns := True;
+        if Metadata.IsWritable(I) then begin
+          FHasWritableAutoIncrementColumns := True;
+          if not NewRowAccessor.IsNull(I) then
+            Continue;
+        end;
+        if FReturningPairs.Count = 0 then
+          SQLWriter.AddText(' RETURNING ', Result);
+        FReturningPairs.Add(I, FReturningPairs.Count{$IFNDEF GENERIC_INDEX}+1{$ENDIF});
+        Tmp := Metadata.GetColumnName(I);
+        {$IF DECLARED(DSProps_InsertReturningFields)}
+        if (Fields <> nil) then begin
+          ColumnIndex := Fields.IndexOf(Tmp);
+          if ColumnIndex > -1 then
+            Fields.Delete(ColumnIndex); { avoid duplicates }
+        end;
+        {$IFEND}
+        Tmp := IdentifierConverter.Quote(Tmp, iqColumn);
+        SQLWriter.AddText(Tmp, Result);
+        SQLWriter.AddChar(',', Result);
+      end;
+    {$IF DECLARED(DSProps_InsertReturningFields)}
+    if (Fields <> nil) and (Fields.Count > 0) then begin
+      if FReturningPairs.Count = 0 then
+        SQLWriter.AddText(' RETURNING ', Result);
+      for I := 0 to Fields.Count - 1 do begin
+        Tmp := Fields[I];
+        ColumnIndex := MetaData.FindColumn(Tmp);
+        if ColumnIndex = InvalidDbcIndex then
+          raise CreateColumnWasNotFoundException(Tmp);
+        FReturningPairs.Add(ColumnIndex, FReturningPairs.Count{$IFNDEF GENERIC_INDEX}+1{$ENDIF});
+        Tmp := IdentifierConverter.Quote(Tmp, iqColumn);
+        SQLWriter.AddText(Tmp, Result);
+        SQLWriter.AddChar(',', Result);
+      end;
+    end;
+    {$IFEND}
+    SQLWriter.CancelLastComma(Result);
+    SQLWriter.Finalize(Result);
+  finally
+    FreeAndNil(SQLWriter);
+    {$IF DECLARED(DSProps_InsertReturningFields)}
+    FreeAndNil(Fields);
+    {$IFEND}
+  end;
+end;
+
+{**
+  Posts updates to database.
+  @param Sender a cached result set object.
+  @param UpdateType a type of updates.
+  @param OldRowAccessor an accessor object to old column values.
+  @param NewRowAccessor an accessor object to new column values.
+}
+procedure TZPostgreSQLCachedResolverV10up.PostUpdates(
+  const Sender: IZCachedResultSet; UpdateType: TZRowUpdateType;
+  const OldRowAccessor, NewRowAccessor: TZRowAccessor);
+begin
+  inherited PostUpdates(Sender, UpdateType, OldRowAccessor, NewRowAccessor);
+  if (UpdateType = utInserted) then begin
+    if (FReturningPairs.Count >0) then
+      UpdateAutoIncrementFields(Sender, UpdateType, OldRowAccessor, NewRowAccessor, Self);
+    if FHasWritableAutoIncrementColumns then
+      InsertStatement := nil;
+  end;
+end;
+
+{**
+ Do Tasks after Post updates to database.
+  @param Sender a cached result set object.
+  @param UpdateType a type of updates.
+  @param OldRowAccessor an accessor object to old column values.
+  @param NewRowAccessor an accessor object to new column values.
+}
+{$IFDEF FPC} {$PUSH} {$WARN 5024 off : Parameter "$1" not used} {$ENDIF}
+procedure TZPostgreSQLCachedResolverV10up.UpdateAutoIncrementFields(
+  const Sender: IZCachedResultSet; UpdateType: TZRowUpdateType;
+  const OldRowAccessor, NewRowAccessor: TZRowAccessor;
+  const Resolver: IZCachedResolver);
+var
+  I: Integer;
+  RS: IZResultSet;
+begin
+  RS := InsertStatement.GetResultSet;
+  if (RS <> nil) then try
+    if RS.Next then
+      for i := 0 to FReturningPairs.Count -1 do with PZIndexPair(FReturningPairs[I])^ do
+        NewRowAccessor.SetValue(SrcOrDestIndex, RS.GetValue(ColumnIndex));
+  finally
+    RS.Close; { Without Close RS keeps circular ref to Statement causing mem leak }
+    RS := nil;
+  end;
+end;
+{$IFDEF FPC} {$POP} {$ENDIF}
 
 initialization
 {$ENDIF ZEOS_DISABLE_POSTGRESQL} //if set we have an empty unit

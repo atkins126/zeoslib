@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -229,6 +229,8 @@ procedure Curr2DBNumeric_LE(const Src: Currency; Dest: PDB_NUMERIC; const Numeri
 procedure Curr2DBNumeric_BE(const Src: Currency; Dest: PDB_NUMERIC; const NumericSign: TNumericSign);
 {$IFEND}
 
+function SQLServerProductToHostVersion(const ProductVersion: String): Integer;
+
 procedure MoveReverseByteOrder(Dest, Src: PAnsiChar; Len: LengthInt);
 
 function TokenizeSQLQueryRaw(const SQL: SQLString; {$IFDEF UNICODE}RawCP: Word;{$ENDIF}
@@ -280,6 +282,7 @@ function CreateBinaryException: EZSQLException;
 function CreateNonBinaryException: EZSQLException;
 function CreateConversionError(ColumnIndex: Integer; Actual, Expected: TZSQLType): EZSQLException;
 function CreateBindVarOutOfRangeError(Index: Integer): EZSQLException;
+function CreateColumnWasNotFoundException(const ColumnName: String): EZSQLException;
 
 function GetW2A2WConversionCodePage(ConSettings: PZConSettings): Word; {$IFDEF WITH_INLINE}inline;{$ENDIF}
 
@@ -1139,6 +1142,41 @@ begin
 end;
 {$IFEND}
 
+function SQLServerProductToHostVersion(const ProductVersion: String): Integer;
+var P, PDot, PEnd: PChar;
+  MajorVersion: Integer;
+  MiniorVersion: Integer;
+  SubVersion: Integer;
+begin
+  if ProductVersion <> '' then begin
+    MajorVersion := 0;
+    MiniorVersion := 0;
+    SubVersion := 0;
+    P := Pointer(ProductVersion);
+    PEnd := p + Length(ProductVersion);
+    PDot := P;
+    while (PDot < PEnd) and ((Ord(PDot^) >= Ord('0')) and (Ord(PDot^) <= Ord('9'))) do
+      Inc(PDot);
+    if PDot^ = '.' then begin
+      MajorVersion := {$IFDEF UNICODE}UnicodeToIntDef{$ELSE}RawToIntDef{$ENDIF}(P, PDot, 0);
+      P := PDot +1;
+      PDot := P +1;
+      while (PDot < PEnd) and ((Ord(PDot^) >= Ord('0')) and (Ord(PDot^) <= Ord('9'))) do
+        Inc(PDot);
+      if PDot^ = '.' then begin
+        MiniorVersion := {$IFDEF UNICODE}UnicodeToIntDef{$ELSE}RawToIntDef{$ENDIF}(P, PDot, 0);
+        P := PDot +1;
+        PDot := P +1;
+        while (PDot < PEnd) and ((Ord(PDot^) >= Ord('0')) and (Ord(PDot^) <= Ord('9'))) do
+          Inc(PDot);
+        SubVersion := {$IFDEF UNICODE}UnicodeToIntDef{$ELSE}RawToIntDef{$ENDIF}(P, PDot, 0);
+      end;
+    end;
+    Result := MajorVersion*1000000 + MiniorVersion * 100{0} + SubVersion;
+  end else
+    Result := 0;
+end;
+
 procedure MoveReverseByteOrder(Dest, Src: PAnsiChar; Len: LengthInt);
 var B: Byte;
 begin
@@ -1435,36 +1473,6 @@ begin
   finally
     Tokens.Free;
   end;
-end;
-
-function TestEncoding(const Bytes: TByteDynArray; const Size: Cardinal): TZCharEncoding;
-begin
-  Result := ceDefault;
-  {EgonHugeist:
-    Step one: Findout, what's comming in! To avoid User-Bugs as good as possible
-      it is possible that a PAnsiChar OR a PWideChar was written into
-      the Stream!!!  And these chars could be trunced with changing the
-      Stream.Size.
-      I know this can lead to pain with two byte ansi chars, but what else can i do?
-    step two: detect the encoding }
-
-  if (Size mod 2 = 0) and ( ZFastCode.StrLen(Pointer(Bytes)) {%H-}< Size ) then //Sure PWideChar written!! A #0 was in the byte-sequence!
-    result := ceUTF16
-  else
-    //if ConSettings.AutoEncode then
-      case ZDetectUTF8Encoding(Pointer(Bytes), Size) of
-        etUSASCII: Result := ceDefault; //Exact!
-        etAnsi:
-          { Sure this isn't right in all cases!
-            Two/four byte WideChars causing the same result!
-            Leads to pain! Is there a way to get a better test?
-            I've to start from the premise the function which calls this func
-            should decide wether ansi or unicode}
-          Result := ceAnsi;
-        etUTF8: Result := ceUTF8; //Exact!
-      end
-    //else
-      //Result := ceDefault
 end;
 
 function CreateUnsupportedParameterTypeException(Index: Integer; ParamType: TZSQLType): EZSQLException;
@@ -2267,6 +2275,11 @@ end;
 function CreateBindVarOutOfRangeError(Index: Integer): EZSQLException;
 begin
   Result := EZSQLException.Create(Format(SBindVarOutOfRange, [Index]));
+end;
+
+function CreateColumnWasNotFoundException(const ColumnName: String): EZSQLException;
+begin
+  Result := EZSQLException.Create(Format(SColumnWasNotFound, [ColumnName]));
 end;
 
 function GetW2A2WConversionCodePage(ConSettings: PZConSettings): Word; {$IFDEF WITH_INLINE}inline;{$ENDIF}

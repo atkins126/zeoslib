@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -133,6 +133,17 @@ type
     destructor Destroy; override;
     procedure BeforeClose; override;
     procedure AfterClose; override;
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable;
       var AError: EZSQLConnectionLost); override;
 
@@ -220,6 +231,17 @@ type
       LobStreamMode: TZLobStreamMode; const OpenLobStreams: TZSortedList;
       CurrentRowAddr: PInteger);
   public //implement IImmediatelyReleasable
+    /// <summary>Releases all driver handles and set the object in a closed
+    ///  Zombi mode waiting for destruction. Each known supplementary object,
+    ///  supporting this interface, gets called too. This may be a recursive
+    ///  call from parant to childs or vice vera. So finally all resources
+    ///  to the servers are released. This method is triggered by a connecton
+    ///  loss. Don't use it by hand except you know what you are doing.</summary>
+    /// <param>"Sender" the object that did notice the connection lost.</param>
+    /// <param>"AError" a reference to an EZSQLConnectionLost error.
+    ///  You may free and nil the error object so no Error is thrown by the
+    ///  generating method. So we start from the premisse you have your own
+    ///  error handling in any kind.</param>
     procedure ReleaseImmediat(const Sender: IImmediatelyReleasable; var AError: EZSQLConnectionLost);
     function GetConSettings: PZConSettings;
   public //implement IZLob
@@ -390,7 +412,7 @@ var
   TableColumns: IZResultSet;
   Connection: IZConnection;
   Driver: IZDriver;
-  IdentifierConvertor: IZIdentifierConvertor;
+  IdentifierConverter: IZIdentifierConverter;
   Analyser: IZStatementAnalyser;
   Tokenizer: IZTokenizer;
 begin
@@ -401,7 +423,7 @@ begin
     Driver := Connection.GetDriver;
     Analyser := Driver.GetStatementAnalyser;
     Tokenizer := Driver.GetTokenizer;
-    IdentifierConvertor := Metadata.GetIdentifierConvertor;
+    IdentifierConverter := Metadata.GetIdentifierConverter;
     try
       if Analyser.DefineSelectSchemaFromQuery(Tokenizer, SQL) <> nil then
         for I := 0 to ResultSet.ColumnsInfo.Count - 1 do begin
@@ -409,7 +431,7 @@ begin
           ClearColumn(Current);
           if Current.TableName = '' then
             continue;
-          TableColumns := Metadata.GetColumns(Current.CatalogName, Current.SchemaName, Metadata.AddEscapeCharToWildcards(IdentifierConvertor.Quote(Current.TableName)),'');
+          TableColumns := Metadata.GetColumns(Current.CatalogName, Current.SchemaName, Metadata.AddEscapeCharToWildcards(IdentifierConverter.Quote(Current.TableName, iqTable)),'');
           if TableColumns <> nil then begin
             TableColumns.BeforeFirst;
             while TableColumns.Next do
@@ -424,7 +446,7 @@ begin
       Connection := nil;
       Analyser := nil;
       Tokenizer := nil;
-      IdentifierConvertor := nil;
+      IdentifierConverter := nil;
     end;
   end;
   Loaded := True;
@@ -2681,7 +2703,7 @@ begin
     if I > 0 then
       SQLWriter.AddText(' AND ', Result);
     S := MetaData.GetColumnName(idx);
-    Tmp := IdentifierConvertor.Quote(S);
+    Tmp := IdentifierConverter.Quote(S, iqColumn);
     SQLWriter.AddText(Tmp, Result);
     if (Metadata.IsNullable(idx) = ntNullable)
     then SQLWriter.AddText('<=>?', Result) //"null safe equals" operator

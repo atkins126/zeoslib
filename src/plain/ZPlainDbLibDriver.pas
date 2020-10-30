@@ -40,7 +40,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -59,8 +59,7 @@ interface
 {$IFNDEF ZEOS_DISABLE_DBLIB}
 
 uses Classes, {$IFDEF FPC}syncobjs{$ELSE}SyncObjs{$ENDIF},
-  ZCompatibility, ZPlainDriver
-  {$IFDEF TLIST_IS_DEPRECATED},ZClasses{$ENDIF};
+  ZCompatibility, ZPlainDriver, ZClasses;
 
 {***************** Plain API Constants definition ****************}
 const
@@ -1146,14 +1145,32 @@ type
     Integer; stdcall;
   {$ENDIF}
 
-  TZDBLibErrorList = Class({$IFDEF TLIST_IS_DEPRECATED}TZSortedList{$ELSE}TList{$ENDIF})
+  TZDBLibErrorList = Class(TZCustomElementList)
+  protected
+    /// <summary>Notify about an action which will or was performed.
+    ///  if ElementNeedsFinalize is False the method will never be called.
+    ///  Otherwise you may finalize managed types beeing part of each element,
+    ///  such as Strings, Objects etc.</summary>
+    /// <param>"Ptr" the address of the element an action happens for.</param>
+    /// <param>"Index" the index of the element.</param>
+    /// <returns>The address or raises an EListError if the Index is invalid.</returns>
+    procedure Notify(Ptr: Pointer; Action: TListNotification); override;
   public
-    procedure Clear; override;
+    constructor Create;
   End;
 
-  TZDBLibMessageList = Class({$IFDEF TLIST_IS_DEPRECATED}TZSortedList{$ELSE}TList{$ENDIF})
+  TZDBLibMessageList = Class(TZCustomElementList)
+  protected
+    /// <summary>Notify about an action which will or was performed.
+    ///  if ElementNeedsFinalize is False the method will never be called.
+    ///  Otherwise you may finalize managed types beeing part of each element,
+    ///  such as Strings, Objects etc.</summary>
+    /// <param>"Ptr" the address of the element an action happens for.</param>
+    /// <param>"Index" the index of the element.</param>
+    /// <returns>The address or raises an EListError if the Index is invalid.</returns>
+    procedure Notify(Ptr: Pointer; Action: TListNotification); override;
   public
-    procedure Clear; override;
+    constructor Create;
   End;
 
   {$IFDEF TEST_CALLBACK}
@@ -1350,6 +1367,8 @@ type
     FdbSetMaxprocs_S: function(MaxProcs: SmallInt): RETCODE; cdecl;
     FdbSetMaxprocs_I: function(MaxProcs: DBINT): RETCODE; cdecl;
     FdbSetMaxprocs_stdcall: function(MaxProcs: DBINT): RETCODE; stdcall; //sybase has widened the type!
+    FdbSetTime: function(Seconds: Integer): RETCODE; cdecl;
+    FdbSetTime_stdcall: function(Seconds: Integer): RETCODE; stdcall;
     FdbUse: function(dbProc: PDBPROCESS; dbName: PAnsiChar): RETCODE; cdecl;
     FdbUse_stdcall: function(dbProc: PDBPROCESS; dbName: PAnsiChar): RETCODE; stdcall;
     Fdbvarylen_MS: function(Proc: PDBPROCESS; Column: Integer): LongBool; cdecl;
@@ -1467,6 +1486,7 @@ type
     function dbSetLoginTime(Seconds: Integer): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
     function dbSetLName(Login: PLOGINREC; Value: PAnsiChar; Item: Integer): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
     function dbSetMaxprocs(MaxProcs: SmallInt): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
+    function dbSetTime(Seconds: Integer): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
     function dbSetOpt(dbProc: PDBPROCESS; Option: Integer; Char_Param: PAnsiChar; Int_Param: Integer): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
     function dbUse(dbProc: PDBPROCESS; dbName: PAnsiChar): RETCODE; {$IFDEF WITH_INLINE}inline; {$ENDIF}
     function dbVaryLen(dbProc: PDBPROCESS; Column: Integer): DBBOOL; {$IFDEF WITH_INLINE}inline; {$ENDIF}
@@ -1553,6 +1573,7 @@ type
     dbSetLoginTime: function(Seconds: Integer): RETCODE; cdecl;
     dbSetLName: function(Login: PLOGINREC; Value: PAnsiChar; Item: Integer): RETCODE; cdecl;
     dbSetMaxprocs: function(MaxProcs: DBINT): RETCODE; cdecl;
+    dbSetTime: function(Seconds: DBINT): RETCODE; cdecl;
     dbSetOpt: function(dbProc: PDBPROCESS; Option: Integer; Char_Param: PAnsiChar; Int_Param: Integer): RETCODE; cdecl;
     dbUse: function(dbProc: PDBPROCESS; dbName: PAnsiChar): RETCODE; cdecl;
     dbvarylen: function(Proc: PDBPROCESS; Column: Integer): DBBOOL; cdecl;
@@ -1739,10 +1760,11 @@ function SybaseErrorHandle(dbproc: PDBPROCESS; Severity, DbErr, OsErr: Integer;
 {$IFDEF MSWINDOWS} stdcall {$ELSE} cdecl {$ENDIF};
 var
   SqlError: PDBLibError;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SqlError);
+    SqlError := SQLErrors.Add(Index);
     SqlError.dbProc := dbproc;
     SqlError.Severity := Severity;
     SqlError.DbErr := DbErr;
@@ -1751,7 +1773,6 @@ begin
       ZSetString(DbErrStr, StrLen(DbErrStr), SqlError.DbErrStr);
     if OsErrStr <> nil then
       ZSetString(OsErrStr, StrLen(OsErrStr), SqlError.OsErrStr);
-    SQLErrors.Add(SqlError);
   finally
     Result := INT_CANCEL;
     ErrorCS.Leave;
@@ -1764,10 +1785,11 @@ function SybaseMessageHandle(dbproc: PDBPROCESS; MsgNo: DBINT; MsgState,
     Integer; {$IFDEF MSWINDOWS} stdcall {$ELSE} cdecl {$ENDIF};
 var
   SQLMessage: PDBLibMessage;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SQLMessage);
+    SQLMessage := SQLMessages.Add(Index);
     SQLMessage.dbProc := dbproc;
     SQLMessage.MsgNo := MsgNo;
     SQLMessage.MsgState := MsgState;
@@ -1779,7 +1801,6 @@ begin
     if ProcName <> nil then
       ZSetString(ProcName, StrLen(ProcName), SQLMessage.ProcName);
     SQLMessage.Line := Line;
-    SQLMessages.Add(SQLMessage);
   finally
     Result := 0;
     ErrorCS.Leave;
@@ -1791,10 +1812,11 @@ function DbLibErrorHandle(dbproc: PDBPROCESS; Severity, DbErr, OsErr: Integer;
   DbErrStr, OsErrStr: PAnsiChar): Integer; cdecl;
 var
   SqlError: PDBLibError;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SqlError);
+    SqlError := SQLErrors.Add(Index);
     SqlError.dbProc := dbproc;
     SqlError.Severity := Severity;
     SqlError.DbErr := DbErr;
@@ -1803,7 +1825,6 @@ begin
       ZSetString(DbErrStr, StrLen(DbErrStr),SqlError.DbErrStr);
     if OsErrStr <> nil then
       ZSetString(OsErrStr, StrLen(OsErrStr),SqlError.OsErrStr);
-    SQLErrors.Add(SqlError);
   finally
     Result := INT_CANCEL;
     ErrorCS.Leave;
@@ -1815,10 +1836,11 @@ function DbLibMessageHandle(dbproc: PDBPROCESS; MsgNo: DBINT; MsgState, Severity
   MsgText, SrvName, ProcName: PAnsiChar; Line: DBUSMALLINT): Integer; cdecl;
 var
   SQLMessage: PDBLibMessage;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SQLMessage);
+    SQLMessage := SQLMessages.Add(Index);
     SQLMessage.dbProc := dbproc;
     SQLMessage.MsgNo := MsgNo;
     SQLMessage.MsgState := MsgState;
@@ -1830,7 +1852,6 @@ begin
     if ProcName <> nil then
       ZSetString(ProcName, StrLen(ProcName), SQLMessage.ProcName);
     SQLMessage.Line := Line;
-    SQLMessages.Add(SQLMessage);
   finally
     Result := 0;
     ErrorCS.Leave;
@@ -1842,10 +1863,11 @@ function FreeTDSErrorHandle(dbproc: PDBPROCESS; Severity, DbErr, OsErr: Integer;
   DbErrStr, OsErrStr: PAnsiChar): Integer; cdecl;
 var
   SqlError: PDBLibError;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SqlError);
+    SqlError := SQLErrors.Add(Index);
     SqlError.dbProc := dbproc;
     SqlError.Severity := Severity;
     SqlError.DbErr := DbErr;
@@ -1854,7 +1876,6 @@ begin
       ZSetString(DbErrStr, StrLen(DbErrStr),SqlError.DbErrStr);
     if OsErrStr <> nil then
       ZSetString(OsErrStr, StrLen(OsErrStr),SqlError.OsErrStr);
-    SQLErrors.Add(SqlError);
   finally
     Result := INT_CANCEL;
     ErrorCS.Leave;
@@ -1866,10 +1887,11 @@ function FreeTDSMessageHandle(dbproc: PDBPROCESS; MsgNo: DBINT; MsgState, Severi
   MsgText, SrvName, ProcName: PAnsiChar; Line: DBUSMALLINT): Integer; cdecl;
 var
   SQLMessage: PDBLibMessage;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
-    New(SQLMessage);
+    SQLMessage := SQLMessages.Add(Index);
     SQLMessage.dbProc := dbproc;
     SQLMessage.MsgNo := MsgNo;
     SQLMessage.MsgState := MsgState;
@@ -1881,7 +1903,6 @@ begin
     if ProcName <> nil then
       ZSetString(ProcName, StrLen(ProcName), SQLMessage.ProcName);
     SQLMessage.Line := Line;
-    SQLMessages.Add(SQLMessage);
   finally
     Result := 0;
     ErrorCS.Leave;
@@ -1922,17 +1943,25 @@ end;
 procedure TZDBLIBPLainDriver.AssignErrorMessages(dbProc: PDBPROCESS;
   DestErrors: TZDBLibErrorList; DestMessages: TZDBLibMessageList);
 var I: Integer;
+  Src, Dest: Pointer;
+  Index: NativeInt;
 begin
   ErrorCS.Enter;
   try
     for i := SQLErrors.Count -1 downto 0 do
       if (dbProc = nil) or (PDBLibError(SQLErrors[i]).dbProc = dbProc) then begin
-        DestErrors.Add(SQLErrors[i]);
+        Dest := DestErrors.Add(Index);
+        Src := SQLErrors[i];
+        Move(Src^, Dest^, SizeOf(TDBLibError));
+        FillChar(Src^, SizeOf(TDBLibError), #0);
         SQLErrors.Delete(i);
       end;
     for i := SQLMessages.Count -1 downto 0 do
       if (dbProc = nil) or (PDBLibMessage(SQLMessages[i]).dbProc = dbProc) then begin
-        DestMessages.Add(SQLMessages[i]);
+        Dest := DestMessages.Add(Index);
+        Src := SQLMessages[i];
+        Move(Src^, Dest^, SizeOf(TDBLibMessage));
+        FillChar(Src^, SizeOf(TDBLibMessage), #0);
         SQLMessages.Delete(i);
       end;
   finally
@@ -2679,6 +2708,13 @@ begin
     else        Result := FdbSetOpt_MS(dbProc, Option, Char_Param);
   end;
 end;
+
+function TZDBLIBPLainDriver.dbSetTime(Seconds: Integer): RETCODE;
+begin
+  if Assigned(FdbSetTime)
+  then Result := FdbSetTime(Seconds)
+  else Result := FdbSetTime_stdcall(Seconds);
+end;
 {$ENDIF MSWINDOWS}
 
 function TZDBLIBPLainDriver.dbsetversion(Version: DBINT): RETCODE;
@@ -3024,6 +3060,7 @@ begin
       @FdbOpen_stdcall := GetAddress('dbopen');
       @FdbSetLoginTime_stdcall := GetAddress('dbsetlogintime');
       @FdbsetLName_stdcall := GetAddress('dbsetlname');
+      @FdbSetTime_stdCall := GetAddress('dbsettime');
       @FdbSqlExec_stdcall := GetAddress('dbsqlexec');
       @FdbSqlOk_stdcall := GetAddress('dbsqlok');
       @FdbSqlSend_stdcall := GetAddress('dbsqlsend');
@@ -3099,6 +3136,7 @@ begin
 
       @{$IFDEF MSWINDOWS}FdbSetLoginTime{$ELSE}dbSetLoginTime{$ENDIF} := GetAddress('dbsetlogintime');
       @{$IFDEF MSWINDOWS}FdbsetLName{$ELSE}dbsetLName{$ENDIF} := GetAddress('dbsetlname');
+      @{$IFDEF MSWINDOWS}FdbSetTime{$ELSE}dbSetTime{$ENDIF} := GetAddress('dbsettime');
       @{$IFDEF MSWINDOWS}FdbSqlExec{$ELSE}dbSqlExec{$ENDIF} := GetAddress('dbsqlexec');
       @{$IFDEF MSWINDOWS}FdbSqlOk{$ELSE}dbSqlOk{$ENDIF} := GetAddress('dbsqlok');
       @{$IFDEF MSWINDOWS}FdbSqlSend{$ELSE}dbSqlSend{$ENDIF} := GetAddress('dbsqlsend');
@@ -3342,22 +3380,33 @@ end;
 
 { TZDBLibErrorList }
 
-procedure TZDBLibErrorList.Clear;
-var I: Integer;
+constructor TZDBLibErrorList.Create;
 begin
-  for i := Count -1 downto 0 do
-    Dispose(PDBLibError(Items[i]));
-  inherited;
+  inherited Create(SizeOf(TDBLibError), True);
+end;
+
+procedure TZDBLibErrorList.Notify(Ptr: Pointer; Action: TListNotification);
+begin
+  if Action = lnDeleted then begin
+    PDBLibError(Ptr).DbErrStr := EmptyRaw;
+    PDBLibError(Ptr).OsErrStr := EmptyRaw;
+  end;
 end;
 
 { TZDBLibMessageList }
 
-procedure TZDBLibMessageList.Clear;
-var I: Integer;
+constructor TZDBLibMessageList.Create;
 begin
-  for i := Count -1 downto 0 do
-    Dispose(PDBLibMessage(Items[i]));
-  inherited;
+  inherited Create(SizeOf(TDBLibMessage), True);
+end;
+
+procedure TZDBLibMessageList.Notify(Ptr: Pointer; Action: TListNotification);
+begin
+  if Action = lnDeleted then begin
+    PDBLibMessage(Ptr).MsgText  := EmptyRaw;
+    PDBLibMessage(Ptr).SrvName  := EmptyRaw;
+    PDBLibMessage(Ptr).ProcName := EmptyRaw;
+  end;
 end;
 
 initialization

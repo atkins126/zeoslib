@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -1065,15 +1065,6 @@ implementation
 const
   dsMaxRStringSize = 8192; { Maximum string field size declared in DB.pas }
   dsMaxWStringSize = dsMaxRStringSize shr 1;
-
-{$IFDEF FPC} {$PUSH} {$WARN 5024 off : Parameter "$1" not used} {$ENDIF} // encoding unknown - parameter not used intentionally
-
-function ZUnicodeToUnknownRaw(const US: UnicodeString; CP: Word): RawByteString;
-begin
-  Result := RawByteString(US);
-end;
-
-{$IFDEF FPC} {$POP} {$ENDIF}
 
 function ZRawToUnicode(const S: RawByteString; const CP: Word): UnicodeString;
 begin

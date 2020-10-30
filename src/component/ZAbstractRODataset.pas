@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -500,7 +500,8 @@ type
     procedure PSSetParams(AParams: TParams); override;
     function PSInTransaction: Boolean; override;
   {$ENDIF}
-
+  protected
+    procedure DataEvent(Event: TDataEvent; Info: {$IFDEF FPC}PtrInt{$ELSE}NativeInt{$ENDIF}); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -613,7 +614,7 @@ type
     {$IFDEF WITH_TSQLTIMESTAMP_RECORD}
     function GetAsSQLTimeStamp: TSQLTimeStamp; override;
     {$ENDIF}
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     constructor Create(AOwner: TComponent); override;
   public
@@ -649,7 +650,7 @@ type
     procedure GetText(var Text: string; DisplayText: Boolean); override;
     procedure SetAsTimeStamp(const Value: TZTimeStamp);
     procedure SetAsDateTime(Value: TDateTime); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     constructor Create(AOwner: TComponent); override;
   public
@@ -685,7 +686,7 @@ type
     procedure SetAsTime(const Value: TZTime);
     procedure GetText(var Text: string; DisplayText: Boolean); override;
     procedure SetAsDateTime(Value: TDateTime); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     property Value: TZTime read GetAsTime write SetAsTime;
     property SecondFractionsScale: Integer read fScale;
@@ -711,12 +712,10 @@ type
     function GetAsVariant: Variant; override;
     procedure SetAsBoolean(Value: Boolean); override;
     procedure SetVarValue(const Value: Variant); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
   end;
-
-{ TZShortIntField }
 
   TZSmallIntField = class(TSmallIntField)
   private
@@ -727,7 +726,7 @@ type
     procedure SetAsSmallInt(Value: SmallInt);
     function IsRowDataAvailable: Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     procedure SetAsInteger(Value: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}); override;
     function GetAsInteger: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}; override;
@@ -746,7 +745,7 @@ type
   {$IFDEF WITH_FTSHORTINT}
     function IsRowDataAvailable: Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   {$ENDIF}
   protected
     procedure SetAsInteger(Value: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}); override;
@@ -768,7 +767,7 @@ type
     procedure SetAsWord(Value: Word);
     function IsRowDataAvailable: Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     procedure SetAsInteger(Value: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}); override;
     function GetAsInteger: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}; override;
@@ -790,7 +789,7 @@ type
   {$IFDEF WITH_FTBYTE}
     function IsRowDataAvailable: Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   {$ENDIF}
   protected
     procedure SetAsInteger(Value: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}); override;
@@ -814,7 +813,7 @@ type
     procedure SetAsInt(Value: Integer);
     function IsRowDataAvailable: Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     function FilledValueWasNull(var Value: Integer): Boolean;
     function GetAsString: string; override;
@@ -838,7 +837,7 @@ type
     function IsRowDataAvailable: Boolean;
     function FilledValueWasNull(var Value: Largeint): Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     function GetAsLargeInt: LargeInt; {$IFDEF TFIELD_HAS_ASLARGEINT}override;{$ELSE}virtual;{$ENDIF}
     procedure SetAsLargeInt(Value: LargeInt); {$IFDEF TFIELD_HAS_ASLARGEINT}override;{$ELSE}virtual;{$ENDIF}
@@ -872,7 +871,7 @@ type
     function GetAsInteger: {$IFDEF HAVE_TFIELD_32BIT_ASINTEGER}Integer{$ELSE}Longint{$ENDIF}; override;
     function GetAsLargeInt: Largeint; {$IF not defined(WITH_FTLONGWORD) or defined(TFIELD_HAS_ASLARGEINT)} override;{$IFEND}
     {$IFDEF WITH_FTLONGWORD}
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetAsLongWord: {$IFDEF HAVE_TFIELD_32BIT_ASLONGWORD}Cardinal{$ELSE}LongWord{$ENDIF}; override;
     {$ENDIF WITH_FTLONGWORD}
     function GetAsString: string; override;
@@ -949,7 +948,7 @@ type
     function IsRowDataAvailable: Boolean;
     function FilledValueWasNull(var Value: Double): Boolean;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     function GetAsFloat: Double; override;
     procedure SetAsFloat(Value: Double); override;
@@ -970,7 +969,7 @@ type
     function FilledValueWasNull(var Value: Single): Boolean;
   protected
   {$IFDEF WITH_FTSINGLE}
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   {$ENDIF WITH_FTSINGLE}
     function GetAsSingle: Single; {$IFDEF WITH_FTSINGLE}override;{$ENDIF}
     procedure SetAsSingle(Value: Single); {$IFDEF WITH_FTSINGLE}override;{$ENDIF}
@@ -1010,7 +1009,7 @@ type
     function GetAsVariant: Variant; override;
     procedure GetText(var Text: string; DisplayText: Boolean); override;
     procedure SetAsCurrency(Value: Currency); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     {$IFNDEF WIT_ASLARGEINT}
     property AsLargeInt: LargeInt read GetAsLargeInt write SetAsLargeInt;
@@ -1034,7 +1033,7 @@ type
     function GetAsVariant: Variant; override;
     procedure GetText(var Text: string; DisplayText: Boolean); override;
     procedure SetAsCurrency(Value: Currency); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
   end;
@@ -1052,7 +1051,7 @@ type
   protected
     function GetIsNull: Boolean; override;
     function GetAsString: String; override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
     property AsGuid: TGUID read GetAsGuid write SetAsGuid;
@@ -1070,7 +1069,7 @@ type
     function CreateSizeError: EZDatabaseError;
     procedure SetPWideChar(P: Pointer; Len: NativeUint);
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
     function GetIsNull: Boolean; override;
     function GetAsBoolean: Boolean; override;
     function GetDataSize: Integer; override;
@@ -1094,6 +1093,9 @@ type
     {$IFNDEF FIELD_ASWIDESTRING_IS_UNICODESTRING}
     function GetAsUnicodeString: UnicodeString; {$IFDEF WITH_VIRTUAL_TFIELD_ASUNICODESTRING}override;{$ENDIF}
     procedure SetAsUnicodeString(const Value: UnicodeString); {$IFDEF WITH_VIRTUAL_TFIELD_ASUNICODESTRING}override;{$ENDIF}
+    {$ENDIF}
+    {$IFDEF TFIELD_HAS_ASBYTES}
+    function GetAsBytes: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF}; override;
     {$ENDIF}
   public
     constructor Create(AOwner: TComponent); override;
@@ -1144,8 +1146,11 @@ type
     function GetAsUnicodeString: UnicodeString; {$IFDEF WITH_VIRTUAL_TFIELD_ASUNICODESTRING}override;{$ENDIF}
     procedure SetAsUnicodeString(const Value: UnicodeString); {$IFDEF WITH_VIRTUAL_TFIELD_ASUNICODESTRING}override;{$ENDIF}
     {$ENDIF}
+    {$IFDEF TFIELD_HAS_ASBYTES}
+    function GetAsBytes: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF}; override;
+    {$ENDIF}
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
     {$IFNDEF FIELD_ASWIDESTRING_IS_UNICODESTRING}
@@ -1171,7 +1176,7 @@ type
     function GetIsNull: Boolean; override;
     procedure GetText(var Text: string; DisplayText: Boolean); override;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
   end;
@@ -1187,7 +1192,7 @@ type
     function GetAsBytes: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF}; {$IFDEF TFIELD_HAS_ASBYTES}override;{$ENDIF}
     procedure SetAsBytes(const Value: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF}); {$IFDEF TFIELD_HAS_ASBYTES}override;{$ENDIF}
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
     {$IFNDEF TFIELD_HAS_ASBYTES}
@@ -1231,7 +1236,7 @@ type
     function GetAsVariant: Variant; override;
     procedure SetVarValue(const Value: Variant); override;
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     {$IFDEF FIELD_ASWIDESTRING_IS_UNICODESTRING}
     property AsUnicodeString: UnicodeString read GetAsWideString write SetAsWideString;
@@ -1283,7 +1288,7 @@ type
     function GetAsRawByteString: RawByteString;
     procedure SetAsRawByteString(const Value: RawByteString);
   protected
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     {$IFDEF FIELD_ASWIDESTRING_IS_UNICODESTRING}
     property AsUnicodeString: UnicodeString read GetAsWideString write SetAsWideString;
@@ -1310,7 +1315,7 @@ type
   protected
     function GetIsNull: Boolean; override;
     procedure GetText(var Text: string; DisplayText: Boolean); override;
-    procedure Bind(Binding: Boolean); override;
+    procedure Bind(Binding: Boolean); {$IFDEF WITH_VIRTUAL_TFIELD_BIND}override;{$ENDIF}
   public
     procedure Clear; override;
   end;
@@ -1328,7 +1333,7 @@ type
   protected
     class procedure CheckTypeSize(Value: Integer); override;
     {$IFNDEF WITH_VIRTUAL_TFIELD_BIND}
-    procedure Bind(Binding: Boolean); virtual;
+    procedure Bind({%H-}Binding: Boolean); virtual;
     {$ENDIF}
     procedure DefineProperties(Filer: TFiler); override;
     procedure FreeBuffers; override;
@@ -1395,6 +1400,9 @@ type
     property IncludeObjectField: Boolean read FIncludeObjectField write SetIncludeObjectField default False;
   end;
 {$ENDIF}
+  {$IF not declared(TFieldDefsClass)}
+  TFieldDefsClass = class of TFieldDefs;
+  {$IFEND}
 
   TZFieldDef = Class(TFieldDef)
   private
@@ -3170,8 +3178,7 @@ begin
   end else
     raise EZDatabaseError.Create(SRowDataIsNotAvailable);
 
-  if Field.FieldKind = fkData then
-  begin
+  if Field.FieldKind = fkData then begin
     OldRowBuffer.Index := -1;
     NewRowBuffer.Index := -1;
   end;
@@ -3291,12 +3298,12 @@ end;
 }
 procedure TZAbstractRODataset.InternalInitFieldDefs;
 var
-  I, {J,} Size: Integer;
+  I, J, Size: Integer;
   AutoInit: Boolean;
   FieldType: TFieldType;
   SQLType: TZSQLType;
   ResultSet: IZResultSet;
-  //FieldName: string;
+  FieldName: string;
   FName: string;
   //ConSettings: PZConSettings;
   FieldDef: TFieldDef;
@@ -3345,7 +3352,14 @@ begin
           Size := GetScale(I)
         else
           Size := 0;
-        FName := GetColumnLabel(I);
+
+        J := 0;
+        FieldName := GetColumnLabel(I);
+        FName := FieldName;
+        while FieldDefs.IndexOf(FName) >= 0 do begin
+          Inc(J);
+          FName := Format('%s_%d', [FieldName, J]);
+        end;
         {$IFNDEF UNICODE}
         if (FCharEncoding = ceUTF16) //dbc internaly stores everything in UTF8
           {$IF defined(WITH_DEFAULTSYSTEMCODEPAGE) or not defined(LCL)}
@@ -3416,13 +3430,8 @@ begin
   try
     if Assigned(Properties) then
       Temp.AddStrings(Properties);
-    { Define TDataset specific parameters. }
-    Temp.Values[DSProps_Defaults] := BoolStrs[doCalcDefaults in FOptions];
     {$IF declared(DSProps_PreferPrepared)}
     Temp.Values[DSProps_PreferPrepared] := BoolStrs[doPreferPrepared in FOptions];
-    {$IFEND}
-    {$IF declared(DSProps_CachedLobs)}
-    Temp.Values[DSProps_CachedLobs] := BoolStrs[doCachedLobs in FOptions];
     {$IFEND}
     if FTransaction <> nil
     then Txn := THackTransaction(FTransaction).GetIZTransaction
@@ -4101,6 +4110,19 @@ begin
   GotoRow(PZRowBuffer(Buffer)^.Index);
 end;
 
+procedure TZAbstractRODataset.DataEvent(Event: TDataEvent; Info: {$IFDEF FPC}PtrInt{$ELSE}NativeInt{$ENDIF});
+var I, j: Integer;
+begin
+  inherited DataEvent(Event, Info);
+  if Event = deLayoutChange then
+    for i := 0 to Fields.Count -1 do
+      for j := 0 to high(FieldsLookupTable) do
+        if (FieldsLookupTable[j].Field = Fields[i]) and (FieldsLookupTable[j].DataSource = dltResultSet) then begin
+          FResultSetMetadata.SetReadOnly(FieldsLookupTable[j].Index, Fields[i].ReadOnly or not (pfInUpdate in Fields[i].ProviderFlags));
+          FResultSetMetadata.SetSearchable(FieldsLookupTable[j].Index, (pfInWhere in Fields[i].ProviderFlags));
+        end;
+end;
+
 {$IFNDEF WITH_VIRTUAL_DEFCHANGED}
 {$IFDEF FPC} {$PUSH} {$WARN 5024 off : Parameter "$1" not used} {$ENDIF} // base class - parameter not used intentionally
 procedure TZAbstractRODataset.DefChanged(Sender: TObject);
@@ -4272,6 +4294,10 @@ end;
   @param Binding decides if the field is bound or not.
 }
 procedure TZAbstractRODataset.BindFields(Binding: Boolean);
+{$IFNDEF WITH_VIRTUAL_TFIELD_BIND}
+var I: Integer;
+  Field: TField;
+{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 begin
   if Binding then begin
     if FResultSet2AccessorIndexList <> nil then
@@ -4279,6 +4305,60 @@ begin
     FFieldsLookupTable := CreateFieldsLookupTable(FResultSet2AccessorIndexList);
   end;
   inherited BindFields(Binding);
+{$IFNDEF WITH_VIRTUAL_TFIELD_BIND}
+  if not FDisableZFields then
+    for i := 0 to Fields.Count -1 do begin
+      Field := Fields[i];
+      if (Field is TZDateField) then
+        TZDateField(Field).Bind(Binding)
+      else if (Field is TZDateTimeField) then
+        TZDateField(TZDateTimeField).Bind(Binding)
+      else if (Field is TZTimeField) then
+        TZTimeField(Field).Bind(Binding)
+      else if (Field is TZBooleanField) then
+        TZBooleanField(Field).Bind(Binding)
+      else if (Field is TZSmallIntField) then
+        TZSmallIntField(Field).Bind(Binding)
+      else if (Field is TZShortIntField) then
+        TZShortIntField(Field).Bind(Binding)
+      else if (Field is TZWordField) then
+        TZWordField(Field).Bind(Binding)
+      else if (Field is TZByteField) then
+        TZByteField(Field).Bind(Binding)
+      else if (Field is TZIntegerField) then
+        TZIntegerField(Field).Bind(Binding)
+      else if (Field is TZInt64Field) then
+        TZInt64Field(Field).Bind(Binding)
+      else if (Field is TZUInt64Field) then
+        TZUInt64Field(Field).Bind(Binding)
+      else if (Field is TZDoubleField) then
+        TZDoubleField(Field).Bind(Binding)
+      else if (Field is TZSingleField) then
+        TZSingleField(Field).Bind(Binding)
+      else if (Field is TZBCDField) then
+        TZBCDField(Field).Bind(Binding)
+      else if (Field is TZFMTBCDField) then
+        TZFMTBCDField(Field).Bind(Binding)
+      else if (Field is TZGuidField) then
+        TZGuidField(Field).Bind(Binding)
+      else if (Field is TZRawStringField) then
+        TZRawStringField(Field).Bind(Binding)
+      else if (Field is TZUnicodeStringField) then
+        TZUnicodeStringField(Field).Bind(Binding)
+      else if (Field is TZBytesField) then
+        TZBytesField(Field).Bind(Binding)
+      else if (Field is TZVarBytesField) then
+        TZVarBytesField(Field).Bind(Binding)
+      else if (Field is TZRawCLobField) then
+        TZRawCLobField(Field).Bind(Binding)
+      else if (Field is TZUnicodeCLobField) then
+        TZUnicodeCLobField(Field).Bind(Binding)
+      else if (Field is TZUnicodeCLobField) then
+        TZUnicodeCLobField(Field).Bind(Binding)
+      else if (Field is TZBlobField) then
+        TZBlobField(Field).Bind(Binding);
+    end;
+  {$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 {**
@@ -4335,7 +4415,7 @@ begin
       if Properties.Values[DSProps_KeyFields] <> '' then
         KeyFields := Properties.Values[DSProps_KeyFields]
       else
-        KeyFields := DefineKeyFields(Fields, Connection.DbcConnection.GetMetadata.GetIdentifierConvertor);
+        KeyFields := DefineKeyFields(Fields, Connection.DbcConnection.GetMetadata.GetIdentifierConverter);
       FieldRefs := DefineFields(Self, KeyFields, OnlyDataFields, Connection.DbcConnection.GetDriver.GetTokenizer);
       {$IFDEF WITH_VAR_INIT_WARNING}Temp := nil;{$ENDIF}
       SetLength(Temp, Length(FieldRefs));
@@ -4908,7 +4988,8 @@ begin
             ConSettings := FConnection.DbcConnection.GetConSettings;
             CP := GetTransliterateCodePage(Connection.ControlsCodePage);
             if not ((FCharEncoding = ceUTF16) or
-               (TMemoField(TField).Transliterate and (CP <> ConSettings.ClientCodePage.CP))) then
+      {XE10.3 x64 bug: a ObjectCast of a descendand doesn't work -> use exact class or the "As" operator}
+              ((Field as TMemoField).Transliterate and (CP <> ConSettings.ClientCodePage.CP))) then
               CP := ConSettings.ClientCodePage.CP;
             Assert(Blob.QueryInterface(IZCLob, CLob) = S_OK);
             Result := Clob.GetStream(CP);
@@ -5671,7 +5752,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZInt64Field.Clear;
@@ -6334,14 +6415,14 @@ end;
 {$IFNDEF WITH_VIRTUAL_TFIELD_BIND}
 procedure TObjectField.Bind(Binding: Boolean);
 begin
-  if FieldKind = fkLookup then
+  {if FieldKind = fkLookup then
     if Binding then
     begin
       if LookupCache then
         RefreshLookupList
       else
         ValidateLookupInfo(True);
-   end;
+   end;}
 end;
 {$ENDIF}
 
@@ -6572,7 +6653,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF}
 end;
 
 procedure TZDateField.Clear;
@@ -6769,7 +6850,7 @@ begin
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
     fScale := TZAbstractRODataset(DataSet).FResultSetMetadata.GetScale(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF})
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZTimeField.Clear;
@@ -7010,7 +7091,7 @@ begin
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
     fScale := TZAbstractRODataset(DataSet).FResultSetMetadata.GetScale(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF})
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZDateTimeField.Clear;
@@ -7254,7 +7335,7 @@ begin
     TS := Value; //make a copy might be a non writable const
     if (TS.Fractions > 0) then
       TS.Fractions := ZSysUtils.RoundNanoFractionTo(TS.Fractions, fScale);
-    FRowAccessor.SetTimestamp(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, TS);
+    FResultSet.UpdateTimestamp(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, TS);
     if not (State in [dsCalcFields, dsFilter, dsNewValue]) then
       DataEvent(deFieldChange, NativeInt(Self));
   end;
@@ -7277,7 +7358,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZSmallIntField.Clear;
@@ -7372,7 +7453,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZWordField.Clear;
@@ -7466,7 +7547,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZIntegerField.Clear;
@@ -7598,7 +7679,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZCardinalField.Clear;
@@ -7855,7 +7936,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 {$ENDIF WITH_FTSINGLE}
 
@@ -7972,7 +8053,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZDoubleField.Clear;
@@ -8120,7 +8201,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZBCDField.Clear;
@@ -8157,7 +8238,7 @@ end;
 
 function TZBCDField.GetAsCurrency: Currency;
 begin
-  if FilledValueWasNull(Result) then
+  if FilledValueWasNull(Result{%H-}) then
     Result := 0;
 end;
 
@@ -8296,7 +8377,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZFMTBCDField.Clear;
@@ -8439,7 +8520,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZBooleanField.Clear;
@@ -8466,7 +8547,7 @@ end;
 
 function TZBooleanField.GetAsBoolean: Boolean;
 begin
-  if FilledValueWasNull(Result) then
+  if FilledValueWasNull(Result{%H-}) then
     Result := False;
 end;
 
@@ -8555,7 +8636,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZGuidField.Clear;
@@ -8582,7 +8663,7 @@ end;
 
 function TZGuidField.GetAsGuid: TGUID;
 begin
-  if FilledValueWasNull(Result) then begin
+  if FilledValueWasNull(Result{%H-}) then begin
     PInt64(@Result.D1)^ := 0;
     PInt64(@Result.D4)^ := 0;
   end;
@@ -8672,7 +8753,7 @@ begin
       FBufferSize := FBufferSize +1
     end;
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZRawStringField.Clear;
@@ -8719,6 +8800,42 @@ begin
   then Result := TZAbstractRODataset(DataSet).FResultSet.GetBoolean(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF})
   else Result := False;
 end;
+
+{$IFDEF TFIELD_HAS_ASBYTES}
+function TZRawStringField.GetAsBytes: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF};
+var TransliterateCP: Word;
+    P: Pointer;
+    L:  NativeUint;
+label jmpSet1, jmpSetL;
+begin
+  Result := nil;
+  if IsRowDataAvailable then with TZAbstractRODataset(DataSet) do begin
+    TransliterateCP := GetTransliterateCodePage(Connection.ControlsCodePage);
+    if (FColumnCP = zCP_UTF16) then begin
+      P := FResultSet.GetPWideChar(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, L);
+      if L > 0 then begin
+        SetLength(Result, L shl 2);
+        L := ZEncoding.PUnicode2PRawBuf(P, Pointer(Result), L, L shl 2, TransliterateCP);
+        goto jmpSetL;
+      end else goto jmpSet1;
+    end else begin
+      P := FResultSet.GetPAnsiChar(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, L);
+      if (L > 0) then
+        if Transliterate then begin
+          SetLength(Result, L shl 2);
+          L := PRawToPRawBuf(P, Pointer(Result), L, L shl 2, FColumnCP, TransliterateCP);
+jmpSetL:  SetLength(Result, L+1);
+        end else begin
+          SetLength(Result, L+1);
+          Move(P^, Pointer(Result)^, L);
+        end
+      else
+jmpSet1: SetLength(Result, 1);
+    end;
+    PByte(PAnsiChar(Result)+L)^ := 0;
+  end else Result := nil;
+end;
+{$ENDIF}
 
 function TZRawStringField.GetAsString: String;
 {$IFNDEF UNICODE}
@@ -9031,7 +9148,7 @@ begin
       else FColumnCP := FResultSetMetadata.GetColumnCodePage(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF});
     end;
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZUnicodeStringField.Clear;
@@ -9061,6 +9178,22 @@ begin
   else Result := '';
 end;
 {$ENDIF NO_ANSISTRING}
+
+{$IFDEF TFIELD_HAS_ASBYTES}
+function TZUnicodeStringField.GetAsBytes: {$IFDEF WITH_GENERICS_TFIELD_ASBYTES}TArray<Byte>{$ELSE}TBytes{$ENDIF};
+var P: Pointer;
+    L:  NativeUint;
+begin
+  Result := nil;
+  if IsRowDataAvailable then with TZAbstractRODataset(DataSet) do begin
+    P := FResultSet.GetPWideChar(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, L);
+    L := L shl 1;
+    SetLength(Result, L+2);
+    Move(P^, Pointer(Result)^, L);
+    PWord(PAnsiChar(Result)+L)^ := 0;
+  end else Result := nil;
+end;
+{$ENDIF TFIELD_HAS_ASBYTES}
 
 function TZUnicodeStringField.GetAsString: String;
 {$IFNDEF UNICODE}
@@ -9283,7 +9416,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZBytesField.Clear;
@@ -9339,7 +9472,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZVarBytesField.Clear;
@@ -9433,7 +9566,7 @@ begin
         (FColumnCP <>  GetTransliterateCodePage(Connection.ControlsCodePage)));
     end;
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZRawCLobField.Clear;
@@ -9453,15 +9586,17 @@ end;
 procedure TZRawCLobField.SetPWideChar(P: Pointer; Len: NativeUint);
 var Clob: IZClob;
     R: RawByteString;
+    ConSettings: PZConSettings;
 begin
   if not FBound then
     raise CreateUnBoundError(Self);
   with TZAbstractRODataset(DataSet) do begin
     Prepare4DataManipulation(Self);
+    ConSettings := FRowAccessor.ConSettings;
     if (FColumnCP = zCP_UTF16) then begin
        if P = nil then
           P:= PEmptyUnicodeString;
-       CLob := TZLocalMemCLob.CreateWithData(nil, 0, FRowAccessor.ConSettings, FOpenLobStreams);
+       CLob := TZLocalMemCLob.CreateWithData(nil, 0, ConSettings, FOpenLobStreams);
        Clob.SetPWideChar(P, Len); //notify updated
     end else begin
       R := PUnicodeToRaw(P,Len,FColumnCP);
@@ -9469,7 +9604,7 @@ begin
       if Len = 0
       then P := PEmptyUnicodeString
       else P := Pointer(R);
-      CLob := TZLocalMemCLob.CreateWithData(nil, 0, FColumnCP, FRowAccessor.ConSettings, FOpenLobStreams);
+      CLob := TZLocalMemCLob.CreateWithData(nil, 0, FColumnCP, ConSettings, FOpenLobStreams);
       CLob.SetPAnsiChar(P, FColumnCP, Len);
     end;
     FResultSet.UpdateLob(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, Clob);
@@ -9819,7 +9954,7 @@ begin
       else FColumnCP := FResultSetMetadata.GetColumnCodePage(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF});
     end;
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZUnicodeCLobField.Clear;
@@ -10070,9 +10205,8 @@ begin
   L := Length(Value);
   with TZAbstractRODataset(DataSet) do begin
     Prepare4DataManipulation(Self);
-    FRowAccessor.SetNotNull(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF});
     Blob := ResultSet.GetBlob(FFieldIndex{$IFNDEF GENERIC_INDEX}+1{$ENDIF}, lsmWrite);
-    BLob.QueryInterface(IZCLob, Clob);
+    Blob.QueryInterface(IZCLob, Clob);
     if (FColumnCP = zCP_UTF16)
     then SetW(GetTransliterateCodePage(TZAbstractRODataset(DataSet).Connection.ControlsCodePage))
     else CLob.SetPAnsiChar(P, FColumnCP, L);
@@ -10177,7 +10311,7 @@ begin
       raise CreateUnBoundError(Self);
     FFieldIndex := TZAbstractRODataset(DataSet).GetFieldIndex(Self){$IFNDEF GENERIC_INDEX}-1{$ENDIF};
   end;
-  inherited Bind(Binding);
+  {$IFDEF WITH_VIRTUAL_TFIELD_BIND}inherited Bind(Binding);{$ENDIF WITH_VIRTUAL_TFIELD_BIND}
 end;
 
 procedure TZBLobField.Clear;

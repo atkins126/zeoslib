@@ -39,7 +39,7 @@
 {                                                         }
 {                                                         }
 { The project web site is located on:                     }
-{   http://zeos.firmos.at  (FORUM)                        }
+{   https://zeoslib.sourceforge.io/ (FORUM)               }
 {   http://sourceforge.net/p/zeoslib/tickets/ (BUGTRACKER)}
 {   svn://svn.code.sf.net/p/zeoslib/code-0/trunk (SVN)    }
 {                                                         }
@@ -1238,7 +1238,7 @@ begin
   begin
     if (Fields[I].FieldKind = fkData)
       and not (Fields[I].DataType in [ftBlob, ftGraphic, ftMemo, ftBytes, ftVarBytes {$IFDEF WITH_WIDEMEMO}, ftWideMemo{$ENDIF}]) then
-      AppendSepString(Result, IdConverter.Quote(Fields[I].FieldName), ',');
+      AppendSepString(Result, IdConverter.Quote(Fields[I].FieldName, iqColumn), ',');
   end;
 end;
 
@@ -1725,13 +1725,12 @@ begin
         {$ENDIF}
         else Statement.SetLong(Index, {$IFDEF WITH_PARAM_ASLARGEINT}Param.AsLargeInt{$ELSE}StrToInt64(Param.AsString){$ENDIF});
       end;
-    ftBCD:  Statement.SetCurrency(Index, Param.AsBCD);
+    ftBCD:  Statement.SetCurrency(Index, Param.{$IFDEF WITH_PARAM_ASBCD}AsBCD{$ELSE}AsCurrency{$ENDIF});
     ftString, ftFixedChar{$IFDEF WITH_FTWIDESTRING}, ftWideString{$ENDIF}:
       {$IFNDEF UNICODE}
       if (TVarData(Param.Value).VType = varOleStr) {$IFDEF WITH_varUString} or (TVarData(Param.Value).VType = varUString){$ENDIF}
       then Statement.SetUnicodeString(Index, Param.Value)
       else begin
-        {$IFDEF DEBUG}Assert(THackParam(Param).DataSet.InheritsFrom(TZAbstractRODataset), 'Wrong parameter dataset');{$ENDIF}
         ConSettings := TZAbstractRODataset(THackParam(Param).DataSet).Connection.DbcConnection.GetConSettings;
         if ConSettings.ClientCodePage.Encoding = ceUTF16 then begin
           CP := TZAbstractRODataset(THackParam(Param).DataSet).Connection.RawCharacterTransliterateOptions.GetRawTransliterateCodePage(ttParam);
@@ -1776,7 +1775,6 @@ begin
     ftDateTime:
       Statement.SetTimestamp(Index, Param.AsDateTime);
     ftMemo, ftFmtMemo{$IFDEF WITH_WIDEMEMO},ftWideMemo{$ENDIF}: begin
-        {$IFDEF DEBUG}Assert(THackParam(Param).DataSet.InheritsFrom(TZAbstractRODataset), 'Wrong parameter dataset');{$ENDIF}
         ConSettings := TZAbstractRODataset(THackParam(Param).DataSet).Connection.DbcConnection.GetConSettings;
         case TvarData(Param.Value).VType of //it's worth it checking the type i.e. Encodings
           {$IFDEF WITH_varUString}varUString,{$ENDIF}

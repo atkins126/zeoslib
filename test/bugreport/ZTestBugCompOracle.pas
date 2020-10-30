@@ -82,6 +82,8 @@ type
     procedure TestOutParam1;
     procedure TestOutParam2;
     procedure TestDuplicateColumnNames;
+    procedure TestForum_Topic_128125;
+    procedure TestConnectionLossTicket452_Comp;
   end;
 
 {$ENDIF ZEOS_DISABLE_ORACLE}
@@ -92,7 +94,7 @@ uses
 {$IFNDEF VER130BELOW}
   Variants,
 {$ENDIF}
-  ZTestCase, ZSysUtils, ZEncoding;
+  ZTestCase, ZSysUtils, ZEncoding, ZConnection;
 
 { ZTestCompOracleBugReport }
 
@@ -195,6 +197,44 @@ begin
 end;
 
 (*
+see: https://zeoslib.sourceforge.io/viewtopic.php?f=37&p=158452
+*)
+procedure ZTestCompOracleBugReport.TestConnectionLossTicket452_Comp;
+var LossCon: TZConnection;
+  SQL: String;
+  Query: TZQuery;
+begin
+  LossCon := TZConnection.Create(nil);
+  Query := TZQuery.Create(nil);
+  Query.Connection := LossCon;
+  Connection.Connect;
+  try
+    LossCon.User := Connection.User;
+    LossCon.HostName := Connection.HostName;
+    LossCon.Port := Connection.Port;
+    LossCon.Database := Connection.Database;
+    LossCon.Password := Connection.Password;
+    LossCon.Protocol := Connection.Protocol;
+    LossCon.Catalog := Connection.Catalog;
+    LossCon.LibraryLocation := Connection.LibraryLocation;
+    LossCon.Properties.Assign(Connection.Properties);
+    LossCon.Connect;
+    Query.SQL.Text := 'SELECT SID, SERIAL# FROM V$SESSION WHERE AUDSID = Sys_Context(''USERENV'', ''SESSIONID'')';
+    try
+      Query.Open;
+    except
+      Fail('To get this test runinng use SQLPLUS, login as SYSDBA and EXECUTE: "grant select on SYS.V_$SESSION to [My_USERNAME]"');
+    end;
+    SQL := 'ALTER SYSTEM DISCONNECT SESSION ''' + Query.Fields[0].AsString+ ',' + Query.Fields[1].AsString + ''' IMMEDIATE';
+    Connection.ExecuteDirect(SQL);
+    LossCon.Disconnect; //silence
+  finally
+    FreeAndNil(Query);
+    FreeAndNil(LossCon);
+  end;
+end;
+
+(*
 see: https://zeoslib.sourceforge.io/viewtopic.php?f=50&p=150356#p150356
 *)
 procedure ZTestCompOracleBugReport.TestDuplicateColumnNames;
@@ -203,10 +243,56 @@ begin
   Query := CreateQuery;
   Check(Query <> nil);
   try
-    Query.SQL.Text := 'select people.p_id, people.p_dep_id as p_id_1, p1.p_id, p1.p_dep_id as p_id_1 from people join people p1 on p1.p_id = people.p_id';
+    Query.SQL.Text := 'select people.p_id, people.p_dep_id as p_id_1, p1.p_id,'+
+      ' p1.p_dep_id as p_id_1 from people join people p1 on p1.p_id = people.p_id';
     Query.Open;
     Check(Query.Active);
     Query.Next;
+  finally
+    FreeAndNil(Query);
+  end;
+end;
+
+//see https://zeoslib.sourceforge.io/viewtopic.php?f=50&t=128125
+procedure ZTestCompOracleBugReport.TestForum_Topic_128125;
+var Query: TZQuery;
+    Param: TParam;
+begin
+  Query := CreateQuery;
+  Check(Query <> nil);
+  try
+    Query.SQL.Text := 'BEGIN :ParamOut ::= ''Input: ''|| :ParamIn; END;';
+    Param := Query.ParamByName('ParamIn');
+    Param.ParamType := ptInput;
+    Param.AsString := 'Testing';  // Sets datatype to ftWideString which works
+    {$IFDEF UNICODE}//non unicode compiler clearing the result!!
+    Param.DataType := ftString;   // UnComment this to see the error.
+    {$ENDIF}
+    Param := Query.ParamByName('ParamOut');
+    Param.ParamType := ptInputOutput;
+    Param.DataType := ftString;       // Correct output
+
+    Query.ExecSQL;
+
+    CheckEquals('Input: Testing', Query.Params[0].AsString, 'the value of param 0');
+    CheckEquals('Testing', Query.Params[1].AsString, 'the value of param 1');
+
+    Param := Query.ParamByName('ParamIn');
+    Param.ParamType := ptInput;
+    {$IFNDEF UNICODE}//non unicode compiler clearing the result!!
+    Param.DataType := ftWideString;
+    {$ENDIF}
+    Param.AsString := 'Testing';  // Sets datatype to ftWideString which works
+    //Param.DataType := ftWideString;
+
+    Param := Query.ParamByName('ParamOut');
+    Param.ParamType := ptInputOutput;
+    Param.DataType := ftWideString;   // Looks like utf-16 as ansi.
+
+    Query.ExecSQL;
+
+    CheckEquals('Input: Testing', Query.Params[0].AsString, 'the value of param 0');
+    CheckEquals('Testing', Query.Params[1].AsString, 'the value of param 1');
   finally
     FreeAndNil(Query);
   end;
@@ -254,6 +340,7 @@ begin
     Query.Insert;
     Query.FieldByName('b_id').AsInteger := row_id;
     Query.FieldByName('b_long').AsString := 'aaa';
+    CheckEquals('aaa', Query.FieldByName('b_long').AsString);
     Query.FieldByName('b_nclob').{$IFDEF WITH_VIRTUAL_TFIELD_ASWIDESTRING}AsWideString{$ELSE}Value{$ENDIF} := testString+testString;
     Query.FieldByName('b_clob').{$IFDEF WITH_VIRTUAL_TFIELD_ASWIDESTRING}AsWideString{$ELSE}Value{$ENDIF} := testString+testString+testString;
     (Query.FieldByName('b_blob') as TBlobField).LoadFromStream(BinFileStream);
